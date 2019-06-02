@@ -6,6 +6,27 @@
 // ==/UserScript==
 //
 
+/* Utilisation :
+* 1) installer ce script via Violent Monkey
+* 2) Connecter vous à MH
+* 3) Ayez sur votre trolls les parchemins à analyser
+* 4) Rendez-vous dans un autre onglet sur la page https://games.mountyhall.com/mountyhall/grattage
+*/
+
+/* 2019-06-01 v1.0 : version de base
+* On peut cocher les glyphes à gratter pour voir directement l'effet final du parcho
+* On peut survoler le nom du parcho pour voir son effet initial
+* On peut survoler un glyphe pour voir les détails le concernant (je n'affiche juste pas les images)
+* On peut supprimer de la liste un parchemin qu'on n'estime pas intéressant à garder
+* Le petit numéro entre crochets indique le numéro initial de traitement du parcho dans la page, pratique pour s'y retrouver et voir combien de parchos sont traités au total
+* Le bouton pour afficher un récapitulatif affiche en début de page les grattages indiqués pour les parchemins gardés, facile à copier/coller.
+* */
+
+/* 2019-06-02 v1.1 :
+* Affiche lite parchemins gardés et rejetés dans récapitulatif
+* Permet de supprimer des parchemins sur base d'une liste fournie
+* Affiche l'effet de base dans le récapitulatif
+ */
 
 document.getElementsByTagName('body')[0].innerHTML =
     '<p>Vous devez être connecté à Mountyhall. Pour chaque parchemin sur vous, vous ferez 2 appels au serveur mountyhall. Utilisez cet outil de manière responsable.<br>' +
@@ -13,10 +34,30 @@ document.getElementsByTagName('body')[0].innerHTML =
     'Survolez avec la souris les noms des parchemins pour voir les effets initiaux. Survolez les glyphes pour voir les détails.</p>';
 document.getElementsByTagName('body')[0].style.padding = '20px';
 
+let divParcheminsASupprimer = document.createElement('div');
+document.getElementsByTagName('body')[0].appendChild(divParcheminsASupprimer);
+
+let boutonSupprimerParchemins = document.createElement('button');
+boutonSupprimerParchemins.appendChild(document.createTextNode('Supprimer parchemins'));
+boutonSupprimerParchemins.style.margin = '10px';
+boutonSupprimerParchemins.addEventListener('click', supprimerParchemins);
+divParcheminsASupprimer.appendChild(boutonSupprimerParchemins);
+
+let inputParcheminsASupprimer = document.createElement('input');
+inputParcheminsASupprimer.setAttribute('type', 'text');
+inputParcheminsASupprimer.setAttribute('size', '120');
+inputParcheminsASupprimer.setAttribute('id', 'parcheminsASupprimer');
+inputParcheminsASupprimer.setAttribute('placeholder', 'Introduire dans ce champ les numéros des parchemins à supprimer, séparés par des virgules');
+divParcheminsASupprimer.appendChild(inputParcheminsASupprimer);
+
+let divBoutonRecapitulatif = document.createElement('div');
+document.getElementsByTagName('body')[0].appendChild(divBoutonRecapitulatif);
 let boutonAfficherRecapitulatif = document.createElement('button');
+boutonAfficherRecapitulatif.style.margin = '10px';
+boutonAfficherRecapitulatif.style.width = window.getComputedStyle(boutonSupprimerParchemins).getPropertyValue("width");
 boutonAfficherRecapitulatif.appendChild(document.createTextNode('Afficher Récapitulatif'));
 boutonAfficherRecapitulatif.addEventListener('click', afficherRecapitulatif);
-document.getElementsByTagName('body')[0].appendChild(boutonAfficherRecapitulatif);
+divBoutonRecapitulatif.appendChild(boutonAfficherRecapitulatif);
 
 let zoneRecapitulatif = document.createElement('div');
 zoneRecapitulatif.setAttribute('id', 'recapitulatif');
@@ -249,6 +290,14 @@ function rafraichirEffetTotal(parchemin) {
     parcheminsEffetFinal[parchemin] = document.getElementById(parchemin + "-effet").innerHTML;
 }
 
+function supprimerParchemins() {
+    let parcheminsASupprimer = document.getElementById('parcheminsASupprimer').value.replace(/\s/g, "").split(',');
+    for (let p of parcheminsASupprimer) {
+        let boutonSupprimer = document.getElementById(p + '-supprimer');
+        if (boutonSupprimer) supprimerParchemin.call(boutonSupprimer);
+    }
+}
+
 function supprimerParchemin() {
     let tr = this.parentNode.parentNode;
     tr.nextElementSibling.nextElementSibling.style.display = 'none';
@@ -262,7 +311,7 @@ function afficherRecapitulatif() {
     let reponse = '';
     let parcheminsFiltres = parchemins.filter(x => !(x in parcheminsSupprimes));
     for (let p of parcheminsFiltres) {
-        reponse += `<p>${p} - ${parcheminsNoms[p]} : grattages `;
+        reponse += `<p>${p} - ${parcheminsNoms[p]} ${parcheminsEffetsBase[p]} : grattages `;
         let grattes = 0;
         for (let i = 0; i < glyphesCoches[p].length; i++) {
             if (glyphesCoches[p][i]) {
@@ -273,6 +322,9 @@ function afficherRecapitulatif() {
         if (grattes === 0) reponse += 'aucun ';
         reponse += "=> " + parcheminsEffetFinal[p] + '</p>';
     }
+    reponse += '<p><strong>parchemins gardés :</strong> ' + parcheminsFiltres.join(', ') + '</p>';
+    reponse += '<p><strong>parchemins rejetés :</strong> ' + Object.keys(parcheminsSupprimes).join(', ') + '</p>';
+
     document.getElementById('recapitulatif').innerHTML = reponse;
 }
 
