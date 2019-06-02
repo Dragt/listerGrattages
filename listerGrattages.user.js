@@ -266,7 +266,7 @@ function afficherRecapitulatif() {
         let grattes = 0;
         for (let i = 0; i < glyphesCoches[p].length; i++) {
             if (glyphesCoches[p][i]) {
-                reponse += i + ' ';
+                reponse += (i + 1) + ' ';
                 grattes++;
             }
         }
