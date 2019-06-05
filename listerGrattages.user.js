@@ -3,6 +3,7 @@
 // @namespace Violentmonkey Scripts
 // @include */mountyhall/grattage*
 // @grant none
+// @version 1.1.0
 // ==/UserScript==
 //
 
