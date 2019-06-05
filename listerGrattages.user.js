@@ -3,7 +3,7 @@
 // @namespace Violentmonkey Scripts
 // @include */mountyhall/grattage*
 // @grant none
-// @version 1.1.1
+// @version 1.1.2
 // ==/UserScript==
 //
 
@@ -559,14 +559,15 @@ function analyseGribouillages(parchemin) {
 			// + exclusion des gribouillages déjà Grattés ou totalement Grattés
 			if (numeros[i] < numeroDeb || effetDict[repereTableau] == null || epaisseurDict[epaisseur] == null){
 				infoGribouillages[i] = '<center><b>Gribouillage ' + numerosOriginaux[i] + '</b></center>';
+				/*displayDebug(gribouillages, 2);
 				if (gribouillages[i].childNodes[0].value == 0) {
 					infoGribouillages[i] += '<hr/><i>Grattage impossible</i>';
 					effetGribouillages[i] = ajouteMiseEnForme('Vierge') + '<br/>&nbsp;';
 				}
-				else {
+				else {*/
 					infoGribouillages[i] += '<hr/><i>Résultat du Grattage</i> :<br/>&nbsp;&nbsp;' + ajouteMiseEnForme('Aucun changement d\'effet');
 					effetGribouillages[i] = ajouteMiseEnForme('Sans effet') + '<br/>&nbsp;';
-				}
+				//}
 			}
 			else {
 				
