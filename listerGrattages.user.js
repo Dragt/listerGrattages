@@ -3,7 +3,7 @@
 // @namespace Violentmonkey Scripts
 // @include */mountyhall/grattage*
 // @grant none
-// @version 1.1.0
+// @version 1.1.1
 // ==/UserScript==
 //
 
@@ -28,6 +28,14 @@
 * Permet de supprimer des parchemins sur base d'une liste fournie
 * Affiche l'effet de base dans le récapitulatif
  */
+
+let debugLevel = 0;
+
+function displayDebug(data, level = 1) {
+	if (debugLevel >= level) {
+		window.console.log(data);
+	}
+}
 
 document.getElementsByTagName('body')[0].innerHTML =
 	'<p>Vous devez être connecté à Mountyhall. Pour chaque parchemin sur vous, vous ferez 2 appels au serveur mountyhall. Utilisez cet outil de manière responsable.<br>' +
@@ -106,14 +114,14 @@ function extraireParchemins() {
 		parcheminsNoms[option.value] = option.innerHTML.split(' - ')[1];
 	}
 	nombreParchemins = parchemins.length;
-	//console.log("parchemins : ");
-	//console.log(parchemins);
-	//console.log("nombreParchemins : " + nombreParchemins);
+	displayDebug("parchemins : ");
+	displayDebug(parchemins);
+	displayDebug("nombreParchemins : " + nombreParchemins);
 	recupererGlyphes();
 }
 
 function recupererGlyphes() {
-	//console.log('recupererGlyphes');
+	displayDebug("recupererGlyphes");
 	
 	console.log("parchemin traite : " + parcheminTraite);
 	
@@ -126,7 +134,7 @@ function recupererGlyphes() {
 }
 
 function grattageAllerEtapeUn(parchemin) {
-	//console.log('grattageAllerEtapeUn');
+	displayDebug("grattageAllerEtapeUn");
 	let xhr = new XMLHttpRequest();
 	xhr.open("GET", urlGrattage);
 	xhr.onload = grattageAllerEtapeDeux.bind(xhr, parchemin);
@@ -134,8 +142,7 @@ function grattageAllerEtapeUn(parchemin) {
 }
 
 function grattageAllerEtapeDeux(parchemin) {
-	//console.log('grattageAllerEtapeDeux');
-	
+	displayDebug("grattageAllerEtapeDeux");
 	const urlGrattage2 = "https://games.mountyhall.com/mountyhall/MH_Play/Actions/Competences/Play_a_Competence26b.php";
 	let htmlResponse = document.createElement('div');
 	htmlResponse.innerHTML = this.responseText;
@@ -150,6 +157,7 @@ function grattageAllerEtapeDeux(parchemin) {
 }
 
 function extraireGlyphes(parchemin) {
+	displayDebug("extraireGlyphes");
 	let htmlResponse = document.createElement('div');
 	htmlResponse.innerHTML = this.responseText;
 	
@@ -162,13 +170,14 @@ function extraireGlyphes(parchemin) {
 	parcheminsGlyphes[parchemin] = glyphes;
 	traiterGlyphes(parchemin);
 	parcheminTraite++;
-	//console.log(parcheminsGlyphes);
+	displayDebug(parcheminsGlyphes, 2);
 	recupererGlyphes();
 }
 
 function traiterGlyphes(parchemin) {
-	
+	displayDebug("traiterGlyphes");
 	let analyse = analyseGribouillages(parcheminsGlyphes[parchemin].join(' '));
+	displayDebug(analyse, 2);
 	
 	let trEffetsGlyphes = document.createElement('tr');
 	table.appendChild(trEffetsGlyphes);
@@ -266,7 +275,7 @@ function createEmptyTr() {
 }
 
 function cliquerCheckboxGlyphe() {
-	//console.log('clic');
+	displayDebug("clic");
 	let infosGlyphes = this.id.split('-');
 	let parchemin = infosGlyphes[0];
 	let indiceGlyphe = infosGlyphes[2];
@@ -342,6 +351,8 @@ var couleurSansEffet = '707070'; // gris '707070'
 
 // *** Analyse la suite de numéros de gribouillages reçue en paramètre et retourne le résultat sous forme d'un tableau de tableaux ***
 function analyseGribouillages(parchemin) {
+	displayDebug("analyseGribouillages");
+	displayDebug(parchemin, 2);
 	try {
 		var infoGribouillages = new Array();
 		var effetGribouillages = new Array();
@@ -359,6 +370,7 @@ function analyseGribouillages(parchemin) {
 		
 		var numerosOriginaux = parchemin.split(' ');
 		var numeros = parchemin.split(' ');
+		displayDebug(numeros, 2);
 		
 		// + tableau des caractéristiques, avec les noms/abréviations utilisés dans MountyHall et dans l'ordre des affichages dans MountyHall
 		// ATT | ESQ | DEG | REG | Vue | PV | TOUR | Armure | Effet de Zone
