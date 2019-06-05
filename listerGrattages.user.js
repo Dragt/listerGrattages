@@ -1,17 +1,17 @@
 // ==UserScript==
 // @name listeGrattages
 // @namespace Violentmonkey Scripts
-// @include */mountyhall/grattage*
+// @include */mountyhall/Dragttage
+// @include */mountyhall/MH_Play/Play_equipement.php
 // @grant none
-// @version 1.1.2
+// @version 1.2
 // ==/UserScript==
 //
 
 /* Utilisation :
-* 1) installer ce script via Violent Monkey
-* 2) Connecter vous à MH
-* 3) Ayez sur votre trolls les parchemins à analyser
-* 4) Rendez-vous dans un autre onglet sur la page https://games.mountyhall.com/mountyhall/grattage
+* 1) Installez ce script dans Violent Monkey
+* 2) Connectez-vous à MH avec 2 PAs restants (session active)
+* 3) Ayez sur votre trõll les parchemins à analyser
 */
 
 /* 2019-06-01 v1.0 : version de base
@@ -29,53 +29,62 @@
 * Affiche l'effet de base dans le récapitulatif
  */
 
+//-------------------------------- Debug Mode --------------------------------//
+
 let debugLevel = 0;
 
 function displayDebug(data, level = 1) {
 	if (debugLevel >= level) {
-		window.console.log(data);
+		window.console.log("[listerGrattages]", data);
 	}
 }
 
-document.getElementsByTagName('body')[0].innerHTML =
-	'<p>Vous devez être connecté à Mountyhall. Pour chaque parchemin sur vous, vous ferez 2 appels au serveur mountyhall. Utilisez cet outil de manière responsable.<br>' +
-	'Non testé avec des parchemins "spéciaux". (mission, sortilège...)<br>' +
-	'Survolez avec la souris les noms des parchemins pour voir les effets initiaux. Survolez les glyphes pour voir les détails.</p>';
-document.getElementsByTagName('body')[0].style.padding = '20px';
+displayDebug(window.location.href);
 
-let divParcheminsASupprimer = document.createElement('div');
-document.getElementsByTagName('body')[0].appendChild(divParcheminsASupprimer);
+//---------------------- Gestion de la page de Listing -----------------------//
 
-let boutonSupprimerParchemins = document.createElement('button');
-boutonSupprimerParchemins.appendChild(document.createTextNode('Supprimer parchemins'));
-boutonSupprimerParchemins.style.margin = '10px';
-boutonSupprimerParchemins.addEventListener('click', supprimerParchemins);
-divParcheminsASupprimer.appendChild(boutonSupprimerParchemins);
-
-let inputParcheminsASupprimer = document.createElement('input');
-inputParcheminsASupprimer.setAttribute('type', 'text');
-inputParcheminsASupprimer.setAttribute('size', '120');
-inputParcheminsASupprimer.setAttribute('id', 'parcheminsASupprimer');
-inputParcheminsASupprimer.setAttribute('placeholder', 'Introduire dans ce champ les numéros des parchemins à supprimer, séparés par des virgules');
-divParcheminsASupprimer.appendChild(inputParcheminsASupprimer);
-
-let divBoutonRecapitulatif = document.createElement('div');
-document.getElementsByTagName('body')[0].appendChild(divBoutonRecapitulatif);
-let boutonAfficherRecapitulatif = document.createElement('button');
-boutonAfficherRecapitulatif.style.margin = '10px';
-boutonAfficherRecapitulatif.style.width = window.getComputedStyle(boutonSupprimerParchemins).getPropertyValue("width");
-boutonAfficherRecapitulatif.appendChild(document.createTextNode('Afficher Récapitulatif'));
-boutonAfficherRecapitulatif.addEventListener('click', afficherRecapitulatif);
-divBoutonRecapitulatif.appendChild(boutonAfficherRecapitulatif);
-
-let zoneRecapitulatif = document.createElement('div');
-zoneRecapitulatif.setAttribute('id', 'recapitulatif');
-document.getElementsByTagName('body')[0].appendChild(zoneRecapitulatif);
-
-let table = document.createElement('table');
-//table.innerHTML = '<tr><th>parchemin</th><th>Effets (total et glyhpes)</th></tr>';
-
-document.getElementsByTagName('body')[0].appendChild(table);
+function preparePageListing() {
+	document.getElementsByTagName('body')[0].innerHTML =
+		'<p>Vous devez être connecté à Mountyhall. Pour chaque parchemin sur vous, vous ferez 2 appels au serveur mountyhall. Utilisez cet outil de manière responsable.<br>' +
+		'Non testé avec des parchemins "spéciaux". (mission, sortilège...)<br>' +
+		'Survolez avec la souris les noms des parchemins pour voir les effets initiaux. Survolez les glyphes pour voir les détails.</p>';
+	document.getElementsByTagName('body')[0].style.padding = '20px';
+	
+	let divParcheminsASupprimer = document.createElement('div');
+	document.getElementsByTagName('body')[0].appendChild(divParcheminsASupprimer);
+	
+	let boutonSupprimerParchemins = document.createElement('button');
+	boutonSupprimerParchemins.appendChild(document.createTextNode('Supprimer parchemins'));
+	boutonSupprimerParchemins.style.margin = '10px';
+	boutonSupprimerParchemins.addEventListener('click', supprimerParchemins);
+	divParcheminsASupprimer.appendChild(boutonSupprimerParchemins);
+	
+	let inputParcheminsASupprimer = document.createElement('input');
+	inputParcheminsASupprimer.setAttribute('type', 'text');
+	inputParcheminsASupprimer.setAttribute('size', '120');
+	inputParcheminsASupprimer.setAttribute('id', 'parcheminsASupprimer');
+	inputParcheminsASupprimer.setAttribute('placeholder', 'Introduire dans ce champ les numéros des parchemins à supprimer, séparés par des virgules');
+	divParcheminsASupprimer.appendChild(inputParcheminsASupprimer);
+	
+	let divBoutonRecapitulatif = document.createElement('div');
+	document.getElementsByTagName('body')[0].appendChild(divBoutonRecapitulatif);
+	let boutonAfficherRecapitulatif = document.createElement('button');
+	boutonAfficherRecapitulatif.style.margin = '10px';
+	boutonAfficherRecapitulatif.style.width = window.getComputedStyle(boutonSupprimerParchemins).getPropertyValue("width");
+	boutonAfficherRecapitulatif.appendChild(document.createTextNode('Afficher Récapitulatif'));
+	boutonAfficherRecapitulatif.addEventListener('click', afficherRecapitulatif);
+	divBoutonRecapitulatif.appendChild(boutonAfficherRecapitulatif);
+	
+	let zoneRecapitulatif = document.createElement('div');
+	zoneRecapitulatif.setAttribute('id', 'recapitulatif');
+	document.getElementsByTagName('body')[0].appendChild(zoneRecapitulatif);
+	
+	let table = document.createElement('table');
+	table.id = "Dragtable";
+	//table.innerHTML = '<tr><th>parchemin</th><th>Effets (total et glyhpes)</th></tr>';
+	
+	document.getElementsByTagName('body')[0].appendChild(table);
+}
 
 //const urlGrattage = "https://games.mountyhall.com/mountyhall/MH_Play/Actions/Competences/Play_a_CompetenceYY.php??ai_CoutPA=2&ai_JetComp=90&ai_IdComp=26&as_NomComp=Grattage&ab_FlagUse=0&ai_Concentration=0&ai_IDTarget=";
 // https://games.mountyhall.com/mountyhall/MH_Play/Play_action.php?x=28&y=12&as_Action=ACTION+%21%21&as_SelectName=%A0%A0Grattage+%282+PA%29+-+82+%25&as_Action2=&ai_ToDo=126
@@ -92,8 +101,10 @@ let glyphesCoches = {};
 let nombreParchemins = 0;
 let parcheminTraite = 0;
 
-listerParchemins();
-
+if (window.location.pathname == "/mountyhall/Dragttage") {
+	preparePageListing();
+	listerParchemins();
+}
 
 
 function listerParchemins() {
@@ -176,7 +187,9 @@ function extraireGlyphes(parchemin) {
 
 function traiterGlyphes(parchemin) {
 	displayDebug("traiterGlyphes");
-	let analyse = analyseGribouillages(parcheminsGlyphes[parchemin].join(' '));
+	let
+		table = document.getElementById("Dragtable"),
+		analyse = analyseGribouillages(parcheminsGlyphes[parchemin].join(' '));
 	displayDebug(analyse, 2);
 	
 	let trEffetsGlyphes = document.createElement('tr');
@@ -811,3 +824,80 @@ function ajouteMiseEnForme(chaineATraiter, typeMiseEnForme) {
 		alert('ajouteMiseEnForme() : ' + e.message);
 	}
 }
+
+//-------------------- Traitement de la page d'équipement --------------------//
+
+function getNumTroll() {
+// Récupère le num de trõll dans la frame Menu
+// Menu = top.frames["Sommaire"].document
+// onclick du nom du trõll: "EnterPJView(numTroll,750,550)"
+// Faudrait vraiment coller des id dans l'équipement...
+	let
+		liens,
+		str,
+		numTroll = false;
+	try {
+		liens = top.frames["Sommaire"].document.getElementsByTagName("a");
+	} catch(e) {
+		displayDebug(e);
+		return false;
+	}
+	
+	if(liens.length>0 && liens[0].onclick!==void(0)) {
+		str = liens[0].onclick.toString();
+		numTroll = parseInt(/\d+/.exec(str)[0]);
+		displayDebug("numTroll = "+numTroll);
+	}
+	return numTroll;
+}
+
+function ouvrirListe() {
+// Ouvre la page de listing
+	// Ouvrir dans un nouvel onglet:
+	//window.open("/mountyhall/Dragttage");
+	// Ouvrir dans la frame de contenu:
+	window.location.assign("/mountyhall/Dragttage");
+}
+
+function traitementEquipement() {
+// Ajout du lien dans l'équipement
+	displayDebug("traitementEquipement");
+	let
+		numTroll = getNumTroll(),
+		tr, td, btn,
+		titreParchos;
+	
+	if (!numTroll) {
+		displayDebug("Numéro de Trõll non trouvé : abandon");
+		return;
+	}
+	tr = document.getElementById("mh_objet_hidden_"+numTroll+"Parchemin");
+	if(!tr) {
+		displayDebug("Table des parchos non trouvée : abandon");
+		return;
+	}
+	
+	// Récupération de la ligne de titre des parchos
+	// titreParchos.cells:
+	// 0: [+] / [-]
+	// 1: "Parchemin"
+	// 2: nb parchos
+	// 3: poids total
+	titreParchos = document.evaluate(
+		"./preceding-sibling::tr[1]//table//tr[1]",
+		tr, null, 9, null
+	).singleNodeValue;
+	titreParchos.cells[1].style.width = "100px";
+	td = titreParchos.insertCell(2);
+	btn = document.createElement("input");
+	btn.type = "button";
+	btn.className = "mh_form_submit";
+	btn.value = "Lister les grattages";
+	btn.onclick = ouvrirListe;
+	td.appendChild(btn);
+}
+
+if (window.location.pathname == "/mountyhall/MH_Play/Play_equipement.php") {
+	traitementEquipement();
+}
+
