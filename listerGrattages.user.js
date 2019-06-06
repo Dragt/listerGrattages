@@ -45,7 +45,8 @@ displayDebug(window.location.href);
 
 function preparePageListing() {
 	document.getElementsByTagName('body')[0].innerHTML =
-		'<p>Vous devez être connecté à Mountyhall. Pour chaque parchemin sur vous, vous ferez 2 appels au serveur mountyhall. Utilisez cet outil de manière responsable.<br>' +
+		'<p>Pour que l\'outil fonctionne, vous devez être <strong>connecté</strong> à Mountyhall et disposer de <strong>au moins 2 PA</strong>.<br>'
+		'Pour chaque parchemin sur vous, vous ferez 2 appels au serveur mountyhall. Utilisez cet outil de manière responsable.<br>' +
 		'Non testé avec des parchemins "spéciaux". (mission, sortilège...)<br>' +
 		'Survolez avec la souris les noms des parchemins pour voir les effets initiaux. Survolez les glyphes pour voir les détails.</p>';
 	document.getElementsByTagName('body')[0].style.padding = '20px';
