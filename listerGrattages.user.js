@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name listeGrattages
 // @namespace Violentmonkey Scripts
-// @include */mountyhall/Dragttage
+// @include */mountyhall/MH_Play/Actions/Competences/userscriptGrattage
 // @include */mountyhall/MH_Play/Play_equipement.php
 // @grant none
 // @version 1.2
@@ -30,6 +30,8 @@
  */
 
 //-------------------------------- Debug Mode --------------------------------//
+
+const urlOutilListerGrattage = "/mountyhall/MH_Play/Actions/Competences/userscriptGrattage";
 
 let debugLevel = 0;
 
@@ -102,7 +104,7 @@ let glyphesCoches = {};
 let nombreParchemins = 0;
 let parcheminTraite = 0;
 
-if (window.location.pathname == "/mountyhall/Dragttage") {
+if (window.location.pathname == urlOutilListerGrattage) {
 	preparePageListing();
 	listerParchemins();
 }
@@ -116,12 +118,10 @@ function listerParchemins() {
 }
 
 function extraireParchemins() {
-	let htmlResponse = document.createElement('div');
-	htmlResponse.innerHTML = this.responseText;
+	const parser = new DOMParser();
+        const reponseHtml = parser.parseFromString(this.responseText, "text/html");
 	
-	//console.log(htmlResponse.innerHTML);
-	
-	for (let option of htmlResponse.querySelectorAll('optgroup option')) {
+	for (let option of reponseHtml.querySelectorAll('optgroup option')) {
 		parchemins.push(option.value);
 		parcheminsNoms[option.value] = option.innerHTML.split(' - ')[1];
 	}
@@ -156,10 +156,10 @@ function grattageAllerEtapeUn(parchemin) {
 function grattageAllerEtapeDeux(parchemin) {
 	displayDebug("grattageAllerEtapeDeux");
 	const urlGrattage2 = "https://games.mountyhall.com/mountyhall/MH_Play/Actions/Competences/Play_a_Competence26b.php";
-	let htmlResponse = document.createElement('div');
-	htmlResponse.innerHTML = this.responseText;
+	const parser = new DOMParser();
+        const reponseHtml = parser.parseFromString(this.responseText, "text/html");
 	
-	inputs = new FormData(htmlResponse.querySelector('#ActionForm'));
+	inputs = new FormData(reponseHtml.querySelector('#ActionForm'));
 	inputs.set('ai_IDTarget', parchemin);
 	
 	let xhr = new XMLHttpRequest();
@@ -170,13 +170,13 @@ function grattageAllerEtapeDeux(parchemin) {
 
 function extraireGlyphes(parchemin) {
 	displayDebug("extraireGlyphes");
-	let htmlResponse = document.createElement('div');
-	htmlResponse.innerHTML = this.responseText;
+	const parser = new DOMParser();
+        const reponseHtml = parser.parseFromString(this.responseText, "text/html");
 	
-	parcheminsEffetsBase[parchemin] = htmlResponse.querySelectorAll('td')[2].innerHTML;
+	parcheminsEffetsBase[parchemin] = reponseHtml.querySelectorAll('td')[2].innerHTML;
 	
 	let glyphes = [];
-	for (let image of htmlResponse.querySelectorAll(".l_grib1")) {
+	for (let image of reponseHtml.querySelectorAll(".l_grib1")) {
 		glyphes.push(image.src.split('Code=')[1]);
 	}
 	parcheminsGlyphes[parchemin] = glyphes;
@@ -855,9 +855,9 @@ function getNumTroll() {
 function ouvrirListe() {
 // Ouvre la page de listing
 	// Ouvrir dans un nouvel onglet:
-	//window.open("/mountyhall/Dragttage");
+	//window.open(urlOutilListerGrattage);
 	// Ouvrir dans la frame de contenu:
-	window.location.assign("/mountyhall/Dragttage");
+	window.location.assign(urlOutilListerGrattage);
 }
 
 function traitementEquipement() {
