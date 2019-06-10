@@ -38,30 +38,28 @@
  * introduction classes Parchemin et Glyphe pour avoir plus simple à traiter les données
  * refactoring complet pour rigoler
  * améliorations affichages résumé
+ * Possibilité de filtrer et trier
+ * Possibilité d'enregistrer et charger localement, plus de chargement automatique depuis le hall
  */
-
 
 // ****************************************************************************************************************************
 // Inspiré de l'algorithme de détermination des effets des Grattages des gribouillages par trollthar (85665) et
 // du script d'aide de Vapulabehemot, inspirés des recherche de Bran (El'Haine).
 // ****************************************************************************************************************************
 
-
 //-------------------------------- Debug Mode --------------------------------//
-
-let debugLevel = 0;
-
+const debugLevel = 0;
 function displayDebug(data, level = 1) {
     if (debugLevel >= level) {
         window.console.log("[listerGrattages]", data);
     }
 }
-
 displayDebug(window.location.href);
 
-
-
 //---------------------- variables globales et constantes : Général -----------------------//
+
+const STATIQUE = 0;               // 0 -> normal en ligne // 1 -> utilise pachemins hardcodés en bas de fichier
+const EXPORTER_PARCHEMINS = 0;   // affiche en console l'enregistrement des parchemins après récupération dans le hall
 
 const MAX_APPELS = 200;  // nombre maximum -1 de parchemins traités en une fois par l'outil
 let compteurSecuriteNombreAppels = 0;
@@ -73,7 +71,10 @@ const urlOutilListerGrattage = "/mountyhall/MH_Play/Actions/Competences/userscri
 const COULEUR_BONUS = '#336633'; // vert '336633'
 const COULEUR_MALUS = '#990000'; // rouge '990000'
 const COULEUR_AUTRE = '#000000'; // noir '000000'
-const COULEUR_SANS_EFFET = '#707070'; // gris '707070'
+//const COULEUR_SANS_EFFET = '#707070'; // gris '707070'
+
+const AU_MOINS = 1;
+const AU_PLUS = -1;
 
 
 //---------------------- variables globales et constantes : Analyse des glyphes  -----------------------//
@@ -92,6 +93,7 @@ const TOUR  = 6;
 const ARM   = 7;
 const ZONE  = 8;
 const DUREE = 9;
+const TOUTES = 88;
 
 const CARAC = [
     {
@@ -295,19 +297,19 @@ const ORIENTATIONS_GLYPHES = {
 class Createur {
 
     static elem(tag, param={}) {
-        let el = document.createElement(tag);
+        const el = document.createElement(tag);
         if ('id' in param) el.setAttribute('id', param.id);
         if ('texte' in param) el.appendChild(document.createTextNode(param.texte));
         if ('html' in param) el.innerHTML = param.html;
         if ('style' in param) el.setAttribute('style', param.style);
         if ('parent' in param) param.parent.appendChild(el);
         if ('enfants' in param) for (const enfant of param.enfants) el.appendChild(enfant);
-        if ('nomsClasses' in param) for (const classe of param.nomsClasses) el.classList.add(classe);
+        if ('classesHtml' in param) for (const classe of param.classesHtml) el.classList.add(classe);
         if ('attributs' in param) for (const attr of param.attributs) el.setAttribute(attr[0], attr[1]);
         if ('events' in param) {
             for (const event of param.events) {
-                let bindingParams = [];
-                let bindingElement = (('bindElement' in event) ? event.bindElement : el);
+                const bindingParams = [];
+                const bindingElement = (('bindElement' in event) ? event.bindElement : el);
                 bindingParams.push(bindingElement);
                 if ('param' in event) bindingParams.push(...event.param);
                 el.addEventListener(event.nom, event.fonction.bind(...bindingParams));
@@ -319,16 +321,35 @@ class Createur {
 
 //************************* Classe Parchemin *************************
 // contient les données liées à un parchemin, y compris ses glyphes
+
+/* Exemple :
+ {"id":"9308040",
+ "nom":"Yeu'Ki'Pic Gribouillé",
+ "effetDeBaseTexte":"Vue : -6 | PV : +6 D3 | Effet de Zone",
+ "glyphes":[
+ //, ...
+ ],
+ "complet":false,
+ "potentiellementInteressant":true} */
+
+// constructor(id, nom=undefined, effetDeBaseTexte=undefined, glyphes=[] )
+// ajouterGlyphe(glyphe)
+// effetTotal(glyphesRetires=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+
 class Parchemin {
 
+    /**
+     * @return {number}
+     */
     static get NOMBRE_GLYPHES() { return 10; }
 
     constructor(id, nom=undefined, effetDeBaseTexte=undefined, glyphes=[] ) {
         this.id = id;
         this.nom = nom;
         this.effetDeBaseTexte = effetDeBaseTexte;
-        this.glyphes = glyphes;                      // array d'objets Glyphes
-        this.complet = false;                       // considéré complet lorsque 10 glyphes
+        this.complet = false;                             // considéré complet lorsque 10 glyphes
+        this.glyphes = [];
+        for (const g of glyphes) this.ajouterGlyphe(g);   // array d'objets Glyphes
     }
 
     ajouterGlyphe(glyphe) {
@@ -341,7 +362,7 @@ class Parchemin {
     }
 
     effetTotal(glyphesRetires=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]) {
-        let total = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        const total = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         for (const glyphe of this.glyphes.filter((x, i) => !(Boolean(glyphesRetires[i])))) {
             for (const [caracId, e] of Object.entries(glyphe.effet)) {
                 total[Number(caracId)] += e;
@@ -349,36 +370,56 @@ class Parchemin {
         }
         return total;
     }
+
 }
 
-
 //************************* Classe ParcheminEnPage *************************
+
+// constructor(id, nom, effetDeBaseTexte, glyphes)
+// get cochagesGlyphes
+// get effetTotalHtml
+// calculerCaracMax
+// calculerValeurMax(carac, cocher=false)
+// calculerCaracMin
+// calculerValeurMin(carac, cocher=false)
+// creerLignes(parent, position)
+// _creerLigneEffetsGlyphes(parent, position)
+// _creerLigneEffetTotal(parent)
+// _creerLigneSeparation(parent)
+// static _mettreEnFormeTd(td)
+// supprimerParchemin()
+// rafraichirEffetTotal()
+// static creerParchemin(enregistrement)
+
 // Parchemin dans une page html pour l'outil, crée et connait les éléments html correspondant
 class ParcheminEnPage extends Parchemin {
 
     static get W_COL1() { return "10vw"};
 
-    constructor(id, nom, effetDeBaseTexte, glyphes) {
+    constructor(id, nom, effetDeBaseTexte, glyphes, garde=true) {
         super(id, nom, effetDeBaseTexte, glyphes);
         this.ligneEffetsGlyphes;    // TODO pas top ce système en trois ligne, trimballé du passé, à refactorer en un element
         this.ligneEffetTotal;
         this.tdEffetTotal;
         this.ligneSeparation;
-        this.potentiellementInteressant = true; // pour l'afficher ou non dans l'outil
+        this.potentiellementInteressant = garde; // pour l'afficher ou non dans l'outil
     }
 
     get cochagesGlyphes() {
-        return this.glyphes.map(x => Number(x.checkbox.checked));
+        return this.glyphes.map(g => Number(g.coche));
     }
+
     // todo ou alors je pourrais créer des nodes, plus propre...
+    // A voir : affiche volontairement les durées négatives des durées (ême si équivalent 0), plus clair pour composer
+    // pour effet de zone n'affiche quand même pas 0 ou négatif pour bien marquer différence
     get effetTotalHtml() {
         const total = this.effetTotal(this.cochagesGlyphes);
-        let totalHtml = [];
+        const totalHtml = [];
         for (let i = 0; i < total.length; i++) {
-            if (total[i] == 0) continue;                  // pas d'effet
+            if (total[i] == 0 && i != DUREE) continue;                  // pas d'effet, sauf pour Durée où on affiche
             if ((total[i] <= 0) && i == ZONE) continue;   // pas d'efet de zone
             let s = '';
-            let bonus = ((i === TOUR) ? -1 : +1);
+            const bonus = ((i === TOUR) ? -1 : +1);
             let couleur = (((total[i] * bonus) > 0) ? COULEUR_BONUS : COULEUR_MALUS );
             if (i === DUREE || i == ZONE ) couleur = COULEUR_AUTRE;
             if (i === DUREE && ((total[i] > 1) || (total[i] < -1))) s = 's';
@@ -391,34 +432,94 @@ class ParcheminEnPage extends Parchemin {
         return totalHtml.join(" | ");
     }
 
+    calculerCaracMax() {
+        const valeursMax = [];
+        for(let i = 0; i < 10; i++) {
+            if (i != ZONE) {
+                valeursMax.push(this.calculerValeurMax(i, false));
+            }
+        }
+        return valeursMax.indexOf(Math.max(...valeursMax));
+    }
+
+    calculerValeurMax(carac, cocher=false) {
+        // d'abord fait en reducer mais pas aussi lisible...
+        let max = 0;
+        for (const g of this.glyphes) {
+            if (!g.estSansEffet) {
+                for (let i = 0; i < g.caracteristiques.length; i++) {
+                    if (g.caracteristiques[i].id == carac) {
+                        if (ORIENTATIONS_GLYPHES[g.orientation].impact[i] > 0) {
+                            max += g.puissance - i;
+                            break;                    // si le premier est de la carac, le second ne le sera pas...
+                        }
+                        if (ORIENTATIONS_GLYPHES[g.orientation].impact[i] < 0) {
+                            if (cocher) g.cocher();            // la mise à jour du total se fait lros de l'affichage
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        displayDebug('calculerValeurMin / parchemin : ' + this.id + " / carac : " + carac + " / valeur : " + max);
+        return max;
+    }
+
+    calculerCaracMin() {
+        const valeursMin = [];
+        for(let i = 0; i < 10; i++) {
+            if (i != ZONE) {
+                valeursMin.push(this.calculerValeurMin(i, false));
+            }
+        }
+        return valeursMin.indexOf(Math.min(...valeursMin));
+    }
+
+    calculerValeurMin(carac, cocher=false) {
+        let min = 0;
+        for (const [i, g] of Object.entries(this.glyphes)) {
+            if (!g.estSansEffet) {
+                for (let i = 0; i < g.caracteristiques.length; i++) {
+                    if (g.caracteristiques[i].id == carac) {
+                        if (ORIENTATIONS_GLYPHES[g.orientation].impact[i] < 0) {
+                            min -= g.puissance + i;  // attention deuxième carac -1 en puissance
+                        }
+                        else if (ORIENTATIONS_GLYPHES[g.orientation].impact[i] > 0) {
+                            if (cocher) g.cocher();
+                        }
+                    }
+                }
+            }
+        }
+        displayDebug('calculerValeurMin / parchemin : ' + this.id + " / carac : " + carac + " / valeur : " + min);
+        return min;
+    }
+
     creerLignes(parent, position) {
-
         this.ligneEffetsGlyphes = this._creerLigneEffetsGlyphes(parent, position);
-
         this.ligneEffetTotal = this._creerLigneEffetTotal(parent);
-
         this.ligneSeparation = this._creerLigneSeparation(parent);
     }
 
     _creerLigneEffetsGlyphes(parent, position) {
-
-        let trEffetsGlyphes = Createur.elem('tr', { parent: parent });
-        let boutonSupprimer = Createur.elem('button', {
+        const trEffetsGlyphes = Createur.elem('tr', { parent: parent });
+        const boutonSupprimer = Createur.elem('button', {
             id: this.id + '-supprimer',
             attributs: [['title', 'Supprimer ce parchemin']],
             enfants: [document.createTextNode('X')],
-            events: [{ nom: 'click', fonction: this.supprimerParchemin, bindElement: this }] });
+            events: [{ nom: 'click', fonction: this.supprimerParchemin, bindElement: this }],
+            classesHtml: ['mh_form_submit'] });
 
-        let tdIdParchemin = Createur.elem('td', {
+        Createur.elem('td', {                                     // si besoin de nom : const tdIdParchemin
             attributs: [['title', this.effetDeBaseTexte]],
             parent: trEffetsGlyphes,
             style: "width: " + ParcheminEnPage.W_COL1,
             enfants: [boutonSupprimer, document.createTextNode('[' +  (position + 1) + ']  ' + this.id)] });
 
-        let tdEffetsGlyphes = Createur.elem('td', { parent: trEffetsGlyphes });
-        let tableEffetsGlyphes = Createur.elem('table', { id: this.id, parent: tdEffetsGlyphes });
-        let trcheckboxGlyphes = Createur.elem('tr', { parent: tableEffetsGlyphes });
-        let trDetailsEffetsGlyphes = Createur.elem('tr', { parent: tableEffetsGlyphes });
+        const tdEffetsGlyphes = Createur.elem('td', { parent: trEffetsGlyphes });
+        const tableEffetsGlyphes = Createur.elem('table', { id: this.id, parent: tdEffetsGlyphes });
+        const trcheckboxGlyphes = Createur.elem('tr', { parent: tableEffetsGlyphes });
+        const trDetailsEffetsGlyphes = Createur.elem('tr', { parent: tableEffetsGlyphes });
 
         // bien mais plus lent ? :) for (const [i, glyphe] of parchemin.glyphes())
         for(let i = 0; i < this.glyphes.length; i++) {
@@ -431,8 +532,8 @@ class ParcheminEnPage extends Parchemin {
     }
 
     _creerLigneEffetTotal(parent) {
-        let trEffetTotal = Createur.elem('tr', { parent: parent });
-        let tdNomParchemin = Createur.elem('td', {
+        const trEffetTotal = Createur.elem('tr', { parent: parent });
+        const tdNomParchemin = Createur.elem('td', {
             texte : this.nom,
             attributs: [['title', this.effetDeBaseTexte]],
             style: "width: " + ParcheminEnPage.W_COL1,
@@ -443,9 +544,9 @@ class ParcheminEnPage extends Parchemin {
         return trEffetTotal;
     }
 
-    _creerLigneSeparation(parent) {
-        let trSeparation = Createur.elem('tr', { parent: parent });
-        let tdTirets = Createur.elem('td', {
+    _creerLigneSeparation(parent) {                                   // potentiellement static ...
+        const trSeparation = Createur.elem('tr', { parent: parent });
+        const tdTirets = Createur.elem('td', {
             texte: '------------------',
             style: "width: " + ParcheminEnPage.W_COL1,
             parent : trSeparation });
@@ -468,12 +569,54 @@ class ParcheminEnPage extends Parchemin {
     rafraichirEffetTotal() {
         this.tdEffetTotal.innerHTML = this.effetTotalHtml;
     }
+
+    static creerParchemin(enregistrement) {
+        const nouveauxGlyphes = [];
+        for (const [i, numero] of Object.entries(enregistrement.glyphesNumeros)) {
+            nouveauxGlyphes.push(new GlypheEnPage(numero, enregistrement.glyphesCoches[i]));
+        }
+        return new ParcheminEnPage(enregistrement.id, enregistrement.nom, enregistrement.effetDeBaseTexte, nouveauxGlyphes, enregistrement.garde);
+    }
 }
 
 //************************* Classe Glyphe *************************
 // Est-ce que le #pour les champs privés déjà en place ?
 // Est-ce que le lazy getter est implémenté maintenant ?
 // tous est final figé ici une fois contruit, donc je calcule tout une fois au début
+
+/* Exemple :
+ {"numero":"56593",
+ "_numeroUtilise":"56592",
+ "_debutFamille":56584,
+ "_repereCaracteristiques":56616,
+ "caracteristiques":[
+ {"id":4,
+ "presentation":"Vue",
+ "unite":[1,""]},
+ {"id":3,
+ "presentation":"REG",
+ "unite":[1,""]}],
+ "finesse":1,
+ "orientation":0,
+ "traitable":true,
+ "effet":{"3":1,"4":-2},
+ "effetTexte":"Vue : -2  REG : +1 ",
+ "detailsTexte":"Gribouillage : 56593\nFinesse : 1 [Gras] / Puissance : 2\nOrientation : 0 [Malus | Bonus, Initiale]\nCaractéristique 1 : Vue / Caractéristique 2 : REG\nEffet du glyphe : Vue : -2  REG : +1 ",
+ "effetHtml":"<span style=\"color:#990000;font-weight:bold\">Vue : -2 </span><br><span style=\"color:#336633;font-weight:bold\">REG : +1 </span>"} */
+
+// constructor(numero)
+// _analyserGlyphe()
+// static _calculerNumeroUtilise(numero)
+// static _calculerDebutFamille(numero)
+// static _calculerFinesse(numero, debutFamille)
+// static _calculerOrientation(numero, debutFamille)
+// determinerSiTraitable()
+// calculerEffet()
+// composerEffetTexte()
+// composerDetailsTexte()
+// get puissance
+// get estSansEffet
+
 class Glyphe {
 
     static get NUMERO_DEBUT() { return 1288; }
@@ -493,7 +636,7 @@ class Glyphe {
         this._numeroUtilise;
         this._debutFamille;
         this._repereCaracteristiques;
-        this._dejaGratte = false;
+        // this._dejaGratte = false; glyphes inconnus non traités pour le moment
 
         this._analyserGlyphe();
     }
@@ -553,12 +696,13 @@ class Glyphe {
             const signe2 = ORIENTATIONS_GLYPHES[this.orientation].impact[1];
             const puissance2 = this.puissance - 1;
             const unite2 = CARAC[this.caracteristiques[1].id].unite[0];
+            // [{id:, present:, unite}]
 
             valeur1 = signe1 * puissance1 * unite1;
             valeur2 = signe2 * puissance2 * unite2;
         }
 
-        let caracs = {};
+        const caracs = {};
         caracs[this.caracteristiques[0].id] = valeur1;
         caracs[this.caracteristiques[1].id] = valeur2;
 
@@ -566,14 +710,14 @@ class Glyphe {
     }
 
     composerEffetTexte() {
-        let textes = [];
+        const textes = [];
 
         // TODO chrome trie les indice numériques des objets par défaut comme effet... flemme de changer en array ou autre, donc parcourt de l'array carac
         for (const id of this.caracteristiques.map(x => x.id)) {
             if (this.effet[id] != 0) {
                 switch (Number(id)) {
                     case DUREE :
-                        let s = ((this.effet[id] > 1) || (this.effet[id] < -1)) ? 's' : '';
+                        const s = ((this.effet[id] > 1) || (this.effet[id] < -1)) ? 's' : '';
                         textes.push(CARAC[id].presentation + " : " + (this.effet[id] > 0 ? '+' : '') + this.effet[id] + ' ' + CARAC[id].unite[1] + s);
                         break;
                     default :
@@ -587,8 +731,8 @@ class Glyphe {
     }
 
     composerDetailsTexte() {
-        let details =
-`Gribouillage : ${this.numero}
+        const details =
+            `Gribouillage : ${this.numero}
 Finesse : ${this.finesse} [${FINESSES_GLYPHES[this.finesse]}] / Puissance : ${this.puissance}
 Orientation : ${this.orientation} [${ORIENTATIONS_GLYPHES[this.orientation].impactTexte}, ${ORIENTATIONS_GLYPHES[this.orientation].nom}]
 Caractéristique 1 : ${this.caracteristiques[0].presentation} / Caractéristique 2 : ${this.caracteristiques[1].presentation}
@@ -600,23 +744,31 @@ Effet du glyphe : ${this.effetTexte}`;
         return Math.min(5, this.finesse + 1);
     }
 
-
     get estSansEffet() {
         return this.caracteristiques[0].id === this.caracteristiques[1].id;
     }
 
 }
 
+
+// constructor(numero, coche=false)
+// constructor(numero)
+// creerTdEffetGlyphe(id)
+// creerThCheckboxGlyphe(parchemin, positionGlyphe)
+// traiterCheckboxGlyphe(glyphe, parchemin)
+// composerEffetHtml()
+
 //************************* Classe GlypheEnPage *************************
 class GlypheEnPage extends Glyphe {
 
     static get W_EFF() { return "7vw"};
 
-    constructor(numero, td, parcheminEnPage) {
+    constructor(numero, coche=false) { // td, parcheminEnPage
         super(numero);
-        this.tdEffet = td;
+        this.coche = coche;
+        this.tdEffet; // = td;
         this.checkbox;
-        this.parcheminEnPage = parcheminEnPage;
+        //this.parcheminEnPage; // = parcheminEnPage;
         this.effetHtml = this.composerEffetHtml();
     }
 
@@ -627,6 +779,7 @@ class GlypheEnPage extends Glyphe {
             html: this.effetHtml,
             style: "padding:5px; text-align:center; width:" + GlypheEnPage.W_EFF,
             attributs: [['title', this.detailsTexte]] });
+        if (this.coche) this.cocher();
         return this.tdEffet;
     }
 
@@ -636,22 +789,21 @@ class GlypheEnPage extends Glyphe {
             id: parchemin.id + '-checkbox-' + positionGlyphe,
             attributs: [['type', 'checkbox']],
             parent: th,
-            events: [{ nom: 'change', fonction: this.traiterCheckboxGlyphe, param: [this, parchemin]}] });
+            events: [{ nom: 'change', fonction: this.traiterCheckboxGlyphe, bindElement: this, param: [parchemin]}] });
         let span = Createur.elem('span', { texte: ('glyphe ' + (positionGlyphe+1)), parent: th });
+        if (this.coche) this.cocher();
         return th;
     }
 
-    // callback d'event, this est checkbox
-    traiterCheckboxGlyphe(glyphe, parchemin) {
-        if (this.checked) {
-            glyphe.tdEffet.style.opacity = 0.25;
+    traiterCheckboxGlyphe(parchemin) {
+        if (this.checkbox.checked) {
+            this.cocher();
         }
         else {
-            glyphe.tdEffet.style.opacity = 1;
+            this.decocher();
         }
         parchemin.rafraichirEffetTotal();
     }
-
 
     // moyen de faire plus propre, générique, scindé, similaire/compatible avec parchemin... mais bon. :)
     composerEffetHtml() {
@@ -664,7 +816,7 @@ class GlypheEnPage extends Glyphe {
                 let bonus = ((id == TOUR) ? -1 : +1);
                 let couleur = (((this.effet[id] * bonus) > 0) ? COULEUR_BONUS : COULEUR_MALUS );
                 if (id === DUREE || id == ZONE ) couleur = COULEUR_AUTRE;
-                let html = `<span style="color:${couleur};font-weight:bold">`;
+                let html = `<span style="color:${couleur};font-weight:bold;white-space: nowrap">`;
                 let s = (id === DUREE && ((this.effet[id] > 1) || (this.effet[id] < -1))) ? 's' : '';
                 // vestige... gare au type de id tout de même... switch (Number(id)) {    case DUREE :
 
@@ -678,10 +830,34 @@ class GlypheEnPage extends Glyphe {
         return textes.join('<br>');
     }
 
+    cocher() {
+        this.coche = true;
+        if (this.checkbox) this.checkbox.checked = true;
+        if (this.tdEffet) this.tdEffet.style.opacity = 0.25;
+
+    }
+
+    decocher() {
+        this.coche = false;
+        if (this.checkbox) this.checkbox.checked = false;
+        if (this.tdEffet) this.tdEffet.style.opacity = 1;
+    }
+
+    //static creerGlyphe(glyphe) {}
+
 
 }
 
 //************************* Classe Recuperateur *************************
+
+// constructor (demandeur)
+// static appelerServiceHtml(appelant, type, url, callbackHtml, parametres=[], inputs=[])
+// vaChercherParchemins()
+// _extraireParchemins(reponseHtml)
+// vaChercherGlyphes(parcheminId)
+// _grattageAllerEtapeDeux(reponseHtml, parcheminId)
+// _extraireGlyphes(reponseHtml, parcheminId)
+
 // récupère les glyphes et les parchos
 class Recuperateur {
 
@@ -693,7 +869,7 @@ class Recuperateur {
     }
 
     static appelerServiceHtml(appelant, type, url, callbackHtml, parametres=[], inputs=[]) {
-        let xhr = new XMLHttpRequest();
+        const xhr = new XMLHttpRequest();
         xhr.open(type, url);
         xhr.onload = function () {
             const parser = new DOMParser();
@@ -710,12 +886,15 @@ class Recuperateur {
     }
 
     vaChercherParchemins() {
+        displayDebug("vaChercherParchemins");
         // appelle la page de grattage MH pour en extraire les parchemins grattables
         Recuperateur.appelerServiceHtml(this, "GET", Recuperateur.URL_GRATTAGE_1, this._extraireParchemins);
     }
 
     // récupère les parchemins grattables, les instancie, puis appelle le traitement pour les analyser
     _extraireParchemins(reponseHtml) {
+        displayDebug("_extraireParchemins : ")
+        //displayDebug(reponseHtml.querySelector('body').innerHTML);
         const parcheminsRecuperes = [];
         for (const option of reponseHtml.querySelectorAll('optgroup option')) {
             const nomParchemin = option.innerHTML.split(' - ')[1];
@@ -728,24 +907,24 @@ class Recuperateur {
 
     // appelle derrière la première page du grattage, puis la seconde pour le parchemin pour récupérer les glyphes
     vaChercherGlyphes(parcheminId) {
-       Recuperateur.appelerServiceHtml(this, "GET", Recuperateur.URL_GRATTAGE_1, this._grattageAllerEtapeDeux, [parcheminId]);
+        Recuperateur.appelerServiceHtml(this, "GET", Recuperateur.URL_GRATTAGE_1, this._grattageAllerEtapeDeux, [parcheminId]);
     }
 
     // ... d'où on appelle la seconde page de grattage ...
     _grattageAllerEtapeDeux(reponseHtml, parcheminId) {
 
-    let inputs = new FormData(reponseHtml.querySelector('#ActionForm'));
-    inputs.set('ai_IDTarget', parcheminId);
+        const inputs = new FormData(reponseHtml.querySelector('#ActionForm'));
+        inputs.set('ai_IDTarget', parcheminId);
 
-    Recuperateur.appelerServiceHtml(this, "POST", Recuperateur.URL_GRATTAGE_2, this._extraireGlyphes, [parcheminId], [inputs]);
-}
+        Recuperateur.appelerServiceHtml(this, "POST", Recuperateur.URL_GRATTAGE_2, this._extraireGlyphes, [parcheminId], [inputs]);
+    }
 
     // ... d'où on récupère les glyphes pour les fournir au demandeur
     _extraireGlyphes(reponseHtml, parcheminId) {
-        let parcheminPourComposition = new Parchemin(parcheminId);
+        const parcheminPourComposition = new Parchemin(parcheminId);
         parcheminPourComposition.effetDeBaseTexte = reponseHtml.querySelectorAll('td')[2].innerHTML;
         for (const image of reponseHtml.querySelectorAll(".l_grib1")) {
-            let glyphe = new Glyphe(image.src.split('Code=')[1]);
+            const glyphe = new Glyphe(image.src.split('Code=')[1]);
             parcheminPourComposition.ajouterGlyphe(glyphe);
         }
         this.demandeur.recevoirParcheminInfosComposition(parcheminPourComposition);
@@ -753,22 +932,70 @@ class Recuperateur {
 }
 
 
+
 //************************* Classe OutilListerGrattage *************************
+
+// constructor(parent)
+// chargerDepuisHall()
+// recevoirParcheminsInfosBase(parcheminsRecus)
+// _appelerRechercherGlyphes(position)
+// recevoirParcheminInfosComposition(parcheminRecu)
+// reinitialiserChoix(interessant, cochages)
+// afficherTousParchemins()
+// afficherParcheminsGardes()
+// afficherParcheminsFiltres()
+// _afficherParchemin(parchemin, position)
+// nettoyerParchemins()
+// afficherRecapitulatif()
+// _preparerPageListe()
+// _attacherMessageIntro()
+// _attacherBoutonsChargement()
+// _attacherInterfaceSupprimerParchemins()
+// _attacherInterfaceRecapituler()
+// _attacherInterfaceFiltrer()
+// _attacherTableParchemins()
+// viderTableParchemins()
+// exporterParchemins()
+// importerParchemins(sauvegarde)
+// chargerLocalement()
+// sauvegarderLocalement()
+
+// TODO exploser la classe en plusieurs, elle fait trop de choses
 class OutilListerGrattage {
-    constructor() {
+    constructor(parent) {
+        this.parent = parent;
+        this.zone;
         this.parchemins = [];
         this.incomplets = [];
-        this.recuperateur = new Recuperateur(this);
-        this.recuperateur.vaChercherParchemins();
+        this.filtre = {};
+        this.zoneDateEnregistrement;
 
-        // idéalement une classe pour la gui, mais c'est encore restreint
+        // idéalement une classe pour la gui, mais ici c'est encore restreint
         this.table;
         this._preparerPageListe();
+
+        if (STATIQUE) {
+            this.importerParchemins(JSON.parse(SAUVEGARDE));
+            this.afficherParcheminsGardes();
+        }
+        else {
+            this.chargerLocalement();
+        }
+    }
+
+    chargerDepuisHall() {
+        // à mettre après préparation pour pouvoir table déjà créée ?
+        this.viderTableParchemins();
+        this.recuperateur = new Recuperateur(this);
+        this.recuperateur.vaChercherParchemins();
+        this.zoneDateEnregistrement.innerText = "Moment du chargement : " + new Date().toLocaleString();
     }
 
     // recoit les id/nom des parchemins du recuperateur (pourrait les recevoir un à un, intérêt ici ?)
     // ensuite enclenche les appels pour recuperer les glyphes
     recevoirParcheminsInfosBase(parcheminsRecus) {
+        displayDebug("recevoirParcheminsInfosBase");
+        displayDebug(parcheminsRecus);
         this.parchemins =  parcheminsRecus.map(p => new ParcheminEnPage(p.id, p.nom));
         // Attention requêtes pour les glyphes des différents parchemins les unes à la suite des autres, ne doivent pas se chevaucher
         compteurSecuriteNombreAppels = 0;
@@ -778,30 +1005,38 @@ class OutilListerGrattage {
     _appelerRechercherGlyphes(position) {
         if (compteurSecuriteNombreAppels++ > MAX_APPELS) return; // empêcher un trop gros nombre d'appels au serveur
         if ((position < this.parchemins.length) ) this.recuperateur.vaChercherGlyphes(this.parchemins[position].id);
+        else {
+            displayDebug("fin _appelerRechercherGlyphes, nombre : " + this.parchemins.length);
+            if (EXPORTER_PARCHEMINS) { // pour récupérer les parchemins et travailler en local
+                console.log(JSON.stringify(this.exporterParchemins()));
+            }
+        }
     }
 
     // recoit les effets de base/Glyphes d'un parchemin du recuperateur
     // provoque l'affichage et fait l'appel pour le parchemin suivant
     recevoirParcheminInfosComposition(parcheminRecu) {
+        displayDebug("recevoirParcheminInfosComposition : " + parcheminRecu.id);
         // TODO renvoyer des parchemins 'pas complètement remplis' aux recevoirxxx permettait d'utiliser une structure existante,
         // TODO mais un peu lourdingue de recréer les objets enPage (et recalculs pour glyphes surtout !...) et de devoir retrouver le parchemin correspondant équivalent
         // TODO Pptions : recevoirxxx avec juste les données nécessaires ? recoivent et complètent les vrais parchemins (solution initiale...)?
         // TODO Créent des xxxEnPage même si étrange ? Trouver comment caster efficacement du parent -> enfant en js ?
 
         const position = this.parchemins.findIndex(x => x.id === parcheminRecu.id);
-        let parcheminEnPage = this.parchemins[position];
+        const parcheminEnPage = this.parchemins[position];
         parcheminEnPage.effetDeBaseTexte = parcheminRecu.effetDeBaseTexte;
         for (const glyphe of parcheminRecu.glyphes) {
             parcheminEnPage.ajouterGlyphe(new GlypheEnPage(glyphe.numero));
         }
 
-        console.log('------------------------------------------------');
-        console.log(parcheminEnPage);
+        displayDebug('------------------------------------------------');
+        displayDebug(parcheminEnPage);
+        //displayDebug(JSON.stringify(parcheminEnPage));
 
         // si le parchemin n'est pas traitable/complet, on l'affiche quand même avec glyphes manquants [old : le retire directement]
         if (!parcheminEnPage.complet) {
             this.incomplets.push(parcheminEnPage.id + " " + parcheminEnPage.nom);
-            console.log("parchemin incomplet : " + parcheminEnPage.id + " " + parcheminEnPage.nom);
+            displayDebug("parchemin incomplet : " + parcheminEnPage.id + " " + parcheminEnPage.nom);
             //this.parchemins.splice(position, 1);
             //this._appelerRechercherGlyphes(position) ;
         }
@@ -819,87 +1054,118 @@ class OutilListerGrattage {
 
     }
 
-        // TODO avec tri, filtre, bouton d'abord à ajouter à l'interface
-    afficherTousParchemins() {
-        // volontaire ici aussi d'afficher petit à petit dans la dom, plus lourd au total mais visuellement plus direct si beaucoup de parchemins.
-        parcheminTraite  = 0;
-        for (let i = 0; i < parchemins.length; i++) {
-            afficherParchemin(parchemins[i]);
+
+    reinitialiserChoix(interessant, cochages) {
+        for (const p of this.parchemins) {
+            if (interessant) p.potentiellementInteressant = true;
+            if (cochages) {
+                for(const g of p.glyphes) {
+                    g.decocher();
+                }
+            }
         }
     }
 
-    // Prépare l'interface de l'outil
-    _preparerPageListe() {
-        document.getElementsByTagName('body')[0].innerHTML =
-            '<p>Pour que l\'outil fonctionne, vous devez être <strong>connecté</strong> à Mountyhall et disposer de <strong>au moins 2 PA</strong>.<br>' +
-            'Pour chaque parchemin sur vous, vous ferez 2 appels au serveur mountyhall. Utilisez cet outil de manière responsable.<br>' +
-            'Non testé avec des parchemins "spéciaux". (mission, sortilège...)<br>' +
-            'Survolez avec la souris les noms des parchemins pour voir les effets initiaux. Survolez les glyphes pour voir les détails.</p>';
-        document.getElementsByTagName('body')[0].style.padding = '20px';
-
-        let divParcheminsASupprimer = document.createElement('div');
-        document.getElementsByTagName('body')[0].appendChild(divParcheminsASupprimer);
-
-        // faudrait mesurer la différence entre les deux méthodes de création
-        let boutonSupprimerParchemins = Createur.elem('button', {
-            texte : 'Supprimer parchemins',
-            style: "margin: 10px",
-            parent: divParcheminsASupprimer,
-            events: [{nom: 'click', fonction: this.nettoyerParchemins, bindElement: this}] });
-
-        let inputParcheminsASupprimer = document.createElement('input');
-        inputParcheminsASupprimer.setAttribute('type', 'text');
-        inputParcheminsASupprimer.setAttribute('size', '120');
-        inputParcheminsASupprimer.setAttribute('id', 'parcheminsASupprimer');
-        inputParcheminsASupprimer.setAttribute('placeholder', 'Introduire dans ce champ les numéros des parchemins à supprimer, séparés par des virgules');
-        divParcheminsASupprimer.appendChild(inputParcheminsASupprimer);
-
-        let divBoutonRecapitulatif = document.createElement('div');
-        document.getElementsByTagName('body')[0].appendChild(divBoutonRecapitulatif);
-        let boutonAfficherRecapitulatif = document.createElement('button');
-        boutonAfficherRecapitulatif.style.margin = '10px';
-        boutonAfficherRecapitulatif.style.width = window.getComputedStyle(boutonSupprimerParchemins).getPropertyValue("width");
-        boutonAfficherRecapitulatif.appendChild(document.createTextNode('Afficher Récapitulatif'));
-        boutonAfficherRecapitulatif.addEventListener('click', this.afficherRecapitulatif.bind(this));
-        divBoutonRecapitulatif.appendChild(boutonAfficherRecapitulatif);
-
-        let zoneRecapitulatif = document.createElement('div');
-        zoneRecapitulatif.setAttribute('id', 'recapitulatif');
-        document.getElementsByTagName('body')[0].appendChild(zoneRecapitulatif);
-
-        this.table = document.createElement('table');
-        this.table.id = "Dragtable";
-        //table.innerHTML = '<tr><th>parchemin</th><th>Effets (total et glyhpes)</th></tr>';
-
-        document.getElementsByTagName('body')[0].appendChild(this.table);
+    // TODO fournir en parametres un index de l'ordre des parchemins pour l'utiliser de manière universelle, avec le tri aussi
+    afficherTousParchemins() {
+        this.viderTableParchemins();
+        for (let i = 0; i < this.parchemins.length; i++) {
+            this._afficherParchemin(this.parchemins[i], i);
+        }
     }
 
+    // TODO : un peu bizarre... le i affiche correspond au parchemin dans l'array ? Pour filtre pas comme ça je crois
+    afficherParcheminsGardes() {
+        this.viderTableParchemins();
+        for (let i = 0; i < this.parchemins.length; i++) {
+            if (this.parchemins[i].potentiellementInteressant) {
+                this._afficherParchemin(this.parchemins[i], i);
+            }
+        }
+    }
+
+    afficherParcheminsFiltres() {
+        displayDebug("afficherParcheminsFiltres");
+        // choix de reinitialiser pour pouvoir cocher les options les plus puissantes et voir rapidement l'interet
+        // laisser les cochages de l'utilisateur aussi peut être inétressant (et demander moins de progra. ;) ), j'ai fait comme je préfère
+        this.reinitialiserChoix(true, true);
+        const type = this.filtre.type.value;
+        const puissance = Number(this.filtre.puissance.value);
+        const carac = Number(this.filtre.carac.value);
+        const zone = this.filtre.zone.checked;
+        let parcheminsATrier = [];
+
+        for(const p of this.parchemins) {
+            let garde = true;
+            let valeur;
+
+            if (zone) {
+                if (p.calculerValeurMax(ZONE, true) <= 0) garde = false;
+            }
+
+            if (garde) {
+                if (type == AU_MOINS) {
+                    if(carac == TOUTES) {
+                        const caracMax = p.calculerCaracMax();
+                        valeur = p.calculerValeurMax(caracMax, true);
+                    }
+                    else {
+                        valeur = p.calculerValeurMax(carac, true);
+                    }
+                    if (valeur < puissance) garde = false;
+                }
+                else if (type == AU_PLUS) {
+                    if(carac == TOUTES) {
+                        const caracMin = p.calculerCaracMin();
+                        valeur = p.calculerValeurMin(caracMin, true);
+                    }
+                    else {
+                        valeur = p.calculerValeurMin(carac, true);
+                    }
+                    if (valeur > puissance) garde = false;
+                }
+            }
+            p.potentiellementInteressant = garde;
+            if (garde) parcheminsATrier.push([p, valeur]);
+        }
+
+        if (type == AU_MOINS) parcheminsATrier.sort((x, y) => (y[1] - x[1])); // TODO tri secondaire prédéfini, par exemple tours, dégats, ...
+        else if (type == AU_PLUS) parcheminsATrier.sort((x, y) => (x[1] - y[1]));
+
+        this.viderTableParchemins();
+        for (let i = 0; i < parcheminsATrier.length; i++) {
+            this._afficherParchemin(parcheminsATrier[i][0], i);
+        }
+    }
+
+    // volontaire ici aussi d'appeler et d'afficher un à un petit à petit dans la dom,
+    // plus lourd au total mais visuellement plus direct si beaucoup de parchemins.
     _afficherParchemin(parchemin, position) {
         parchemin.creerLignes(this.table, position);
     }
 
     nettoyerParchemins() {
-    let parcheminsASupprimer = document.getElementById('parcheminsASupprimer').value.replace(/\s/g, "").split(','); //enlève les blancs et espaces
+        const parcheminsASupprimer = document.getElementById('parcheminsASupprimer').value.replace(/\s/g, "").split(','); //enlève les blancs et espaces
         for (const p of this.parchemins) {
             if (parcheminsASupprimer.includes(p.id)) p.supprimerParchemin();
         }
     }
 
     afficherRecapitulatif() {
-        let htmlParcheminsModifies = [];
-        let htmlParcheminsNonModifies = [];
-        let parcheminsIdModifies = [];
-        let parcheminsIdSupprimes = [];
+        const htmlParcheminsModifies = [];
+        const htmlParcheminsNonModifies = [];
+        const parcheminsIdModifies = [];
+        const parcheminsIdSupprimes = [];
 
         for (const p of this.parchemins) {
             if (!p.potentiellementInteressant) {
                 parcheminsIdSupprimes.push(p.id);
             }
             else {
-                let cochages = p.cochagesGlyphes;
+                const cochages = p.cochagesGlyphes;
                 let cochagesTexte = "grattages : aucun";
                 if (cochages.includes(1))  cochagesTexte = "<strong>grattages : " + cochages.map((x, i) => (Boolean(x) ? (i + 1) : '')).join(" ") + "</strong>";
-                let html = `<p><strong>${p.id}</strong> - ${p.nom} <em>${p.effetDeBaseTexte}</em> : ${cochagesTexte} => ${p.effetTotalHtml}</p>`;
+                const html = `<p><strong>${p.id}</strong> - ${p.nom} <em>${p.effetDeBaseTexte}</em> : ${cochagesTexte} => ${p.effetTotalHtml}</p>`;
 
                 if (cochages.includes(1)) {
                     htmlParcheminsModifies.push(html);
@@ -915,6 +1181,196 @@ class OutilListerGrattage {
         reponse += '<p><strong style="color:dimgrey">Détails parchemins inchangés :</strong> ' + (htmlParcheminsNonModifies.length ? htmlParcheminsNonModifies.join('') : 'aucun') + '</p>';
 
         document.getElementById('recapitulatif').innerHTML = reponse;
+    }
+
+
+    // Prépare l'interface de l'outil
+    _preparerPageListe() {
+        displayDebug("_preparerPageListe");
+        if (!this.parent) {
+            this.parent = document.getElementsByTagName('body')[0];
+            this.parent.innerHTML = "";
+        }
+        this.zone = Createur.elem('div', { id: "listerGrattages", style: "padding:20px", parent: this.parent });
+
+        this._attacherMessageIntro();
+        this._attacherBoutonsChargement();
+        this._attacherInterfaceSupprimerParchemins();
+        this._attacherInterfaceRecapituler();
+        this._attacherInterfaceFiltrer();
+        this._attacherTableParchemins();
+
+        displayDebug("fin _preparerPageListe");
+    }
+
+    _attacherMessageIntro() {
+        this.zone.innerHTML =
+            '<p>Pour que l\'outil fonctionne, vous devez être <strong>connecté</strong> à Mountyhall et disposer de <strong>au moins 2 PA</strong>.<br>' +
+            'Lors d\'un appel au Hall, pour chaque parchemin sur vous, vous ferez 2 appels au serveur mountyhall. Utilisez cet outil de manière responsable.<br>' +
+            'Non testé avec des parchemins "spéciaux". (mission, sortilège...)<br>' +
+            'Survolez avec la souris les noms des parchemins pour voir les effets initiaux. Survolez les glyphes pour voir les détails.</p>';
+    }
+
+    _attacherBoutonsChargement() {
+        const divBoutonsChargement = Createur.elem('div', { parent: this.zone, style: "margin:0vmin; padding:0.1vmin; border:solid 0px black" });
+
+        Createur.elem('button', {                       // boutonChargerLocalement
+            texte : 'Charger le dernier état (local)',
+            style: "margin: 10px",
+            parent: divBoutonsChargement,
+            events: [{nom: 'click', fonction: this.chargerLocalement, bindElement: this}],
+            classesHtml: ['mh_form_submit'] });
+
+        Createur.elem('button', {                        // boutonSauvegarderLocalement
+            texte : 'Sauvegarder l\'état Actuel (local)',
+            style: "margin: 10px",
+            parent: divBoutonsChargement,
+            events: [{nom: 'click', fonction: this.sauvegarderLocalement, bindElement: this}],
+            classesHtml: ['mh_form_submit'] });
+
+        Createur.elem('button', {                        // boutonSauvegarderLocalement
+            texte : 'Charger depuis votre inventaire (Hall)',
+            style: "margin: 10px",
+            parent: divBoutonsChargement,
+            events: [{nom: 'click', fonction: this.chargerDepuisHall, bindElement: this}],
+            classesHtml: ['mh_form_submit'] });
+
+        this.zoneDateEnregistrement = Createur.elem('span', { style: "margin: 10px", parent: divBoutonsChargement });
+    }
+
+    _attacherInterfaceSupprimerParchemins() {
+        const divParcheminsASupprimer = Createur.elem('div', { parent: this.zone, style: "margin:1vmin; padding:1vmin; border:solid 1px black" });
+
+        this.boutonSupprimerParchemins = Createur.elem('button', {             // moué, this un peu facile pour faire paser un truc...
+            texte : 'Supprimer parchemins',
+            style: "margin: 10px",
+            parent: divParcheminsASupprimer,
+            events: [{nom: 'click', fonction: this.nettoyerParchemins, bindElement: this}],
+            classesHtml: ['mh_form_submit'] });
+
+        Createur.elem('input', {              // si besoin de nom : const inputParcheminsASupprimer =
+            id: 'parcheminsASupprimer',
+            attributs: [['type', 'text'], ['size', '120'], ['placeholder', 'Introduire dans ce champ les numéros des parchemins à supprimer, séparés par des virgules']],
+            parent: divParcheminsASupprimer });
+    }
+
+    _attacherInterfaceRecapituler() {
+        const divBoutonRecapitulatif = Createur.elem('div', { parent: this.zone, style: "margin:1.5vmin; padding:1.5vmin; border:solid 1px black" });
+
+        Createur.elem('button', {               // si besoin de nom : const boutonAfficherRecapitulatif =
+            texte : 'Afficher Récapitulatif',
+            style: "margin: 10px, width: " + window.getComputedStyle(this.boutonSupprimerParchemins).getPropertyValue("width"),
+            parent: divBoutonRecapitulatif,
+            events: [{nom: 'click', fonction: this.afficherRecapitulatif, bindElement: this}],
+            classesHtml: ['mh_form_submit'] });
+
+        Createur.elem('div', {                // si besoin de nom : const zoneRecapitulatif =
+            id: 'recapitulatif',
+            parent: divBoutonRecapitulatif });
+    }
+
+    _attacherInterfaceFiltrer() {
+        // idée au départ de pemettre de trier et filtrer sur chaque carac, avec min et max...
+        // ... mais est-ce bine nécessaire ? (Aller jusqu'à deux ou 3 caracs en même temps ?)
+
+        const divFiltrer = Createur.elem('div', { parent: this.zone, style: "margin:1vmin; padding:1vmin; border:solid 1px black" });
+
+        let html =
+            `<select style="margin:5px; padding:5px" id="typeRecherche" name="typeRecherche" title="la valeur indiquée sera comprise">
+                <option value="${AU_MOINS}" selected>Plus grand que</option>
+                <option value="${AU_PLUS}">Plus petit que</option>
+            </select>`;
+
+        html +=
+            `<label style="margin:5px 0 5px 5px; padding:3px" for="puissanceRecherche">Puissance (-45 à 45) :</label>
+            <input style="margin:5px 5px 5px 0; padding:3px" id="puissanceRecherche" name="puissanceRecherche" type="number" 
+            min="-50" max="50" step="1" value="0">`;
+
+        html += `<select style="margin:5px; padding:3px" id="caracRecherche" name="caracRecherche" >`;
+        html += `<option value="${TOUTES}">Toutes caracs</option>`;
+        let copie = [...CARAC];
+        copie.splice(8,1);                          // sans efet de zone
+        for (const c of copie) {
+            html += `<option value="${c.id}">${c.presentation}</option>`;
+        }
+        html += "</select>";
+
+        html +=
+            `<input style="margin:5px 0 5px 5px; padding:3px" id="effetZoneObligatoire" name="effetZoneObligatoire" type="checkbox">
+              <label style="margin:5px 5px 5px 0; padding:3px" for="effetZoneObligatoire">Effet de zone obligatoire</label>`
+
+        html +=
+            `<button style="margin:5px; padding:3px" class="mh_form_submit" id="boutonRecherche">Filtrer et Trier</button>`;
+
+        divFiltrer.innerHTML = html;
+
+        this.filtre.type = document.getElementById('typeRecherche');
+        this.filtre.puissance = document.getElementById('puissanceRecherche');
+        this.filtre.carac = document.getElementById('caracRecherche');
+        this.filtre.zone = document.getElementById('effetZoneObligatoire');
+        this.filtre.bouton = document.getElementById('boutonRecherche');
+        this.filtre.bouton.addEventListener('click', this.afficherParcheminsFiltres.bind(this));
+
+        // reste événements à gérer
+    }
+
+    _attacherTableParchemins() {
+        this.table = Createur.elem('table', { id: "DragttageTable", parent: this.zone,
+            style: "margin:1vmin; padding:1vmin; border:solid 1px black"});
+    }
+
+    viderTableParchemins() {
+        this.table.innerHTML = "";
+    }
+
+
+    exporterParchemins() {
+        const dateEnregistrement = new Date().toLocaleString();
+        const sauvegarde = [];
+        for (const p of this.parchemins) {
+            let enregistrement = {
+                id: p.id,
+                nom: p.nom,
+                effetDeBaseTexte: p.effetDeBaseTexte,
+                glyphesNumeros: [],
+                glyphesCoches: [],
+                garde: p.potentiellementInteressant,
+                dateEnregistrement: dateEnregistrement
+            };
+            for(const g of p.glyphes) {
+                enregistrement.glyphesNumeros.push(g.numero);
+                enregistrement.glyphesCoches.push(Number(g.coche));
+            }
+            sauvegarde.push(enregistrement);
+        }
+        return sauvegarde;
+    }
+
+    importerParchemins(sauvegarde) {
+        this.parchemins = [];
+        for (const enregistrement of sauvegarde) {
+            this.parchemins.push(ParcheminEnPage.creerParchemin(enregistrement));
+        }
+    }
+
+    chargerLocalement() {
+        if (window.localStorage.getItem('sauvegardeListerGrattages')) {
+            const sauvegarde = JSON.parse(window.localStorage.getItem('sauvegardeListerGrattages'));
+            if (sauvegarde[0]) this.zoneDateEnregistrement.innerText = "Date de la sauvegarde : " + sauvegarde[0].dateEnregistrement;
+            this.importerParchemins(sauvegarde);
+            this.afficherParcheminsGardes();
+        }
+        else {
+            alert('Aucune donnée trouvée localement.');
+        }
+    }
+
+    // TODO ne sauvegarde pas l'ordre des parchemins... faudrait y réfléhir, serait facile de trier la liste d'origine...
+    sauvegarderLocalement() {
+        const sauvegardeTexte = JSON.stringify(this.exporterParchemins());
+        console.log(sauvegardeTexte);
+        window.localStorage.setItem('sauvegardeListerGrattages', sauvegardeTexte);
+        alert ('Etat sauvegardé. (A priori.)');
     }
 
 }
@@ -996,11 +1452,29 @@ function traitementEquipement() {
 
 //---------------------- MAIN -----------------------//
 
+if (STATIQUE) {
+    document.addEventListener('DOMContentLoaded', () => {new OutilListerGrattage()});
+}
+
 if (window.location.pathname == urlOutilListerGrattage) {
     displayDebug("C'est parti !");
-    const outil = new OutilListerGrattage();
+    new OutilListerGrattage();
 }
 
 if (window.location.pathname == "/mountyhall/MH_Play/Play_equipement.php") {
     traitementEquipement();
 }
+
+//--------------------- parchemins hardcodes --------------//
+
+const SAUVEGARDE =
+    `[{"id":"7083001","nom":"Rune Explosive Gribouillé","effetDeBaseTexte":"DEG : +4 | REG : -4 | Vue : -5 | PV : -2 D3 | TOUR : -15 min | Effet de Zone","glyphesNumeros":["102664","101645","50449","49424","54569","71944","70921"],"glyphesCoches":[true,true,true,false,false,false,false],"garde":true},` +
+    `{"id":"7190229","nom":"Traité de Clairvoyance","effetDeBaseTexte":"Vue : +5 | TOUR : -150 min","glyphesNumeros":["48393","99601","35112","45328","11529","76078","47384","55596","81199","24864"],"glyphesCoches":[false,false,false,false,false,false,false,false,false,false],"garde":false},` +
+    `{"id":"8781310","nom":"Rune des Foins Gribouillé","effetDeBaseTexte":"DEG : +4 | Vue : -1 | PV : -12 D3 | Armure : +4","glyphesNumeros":["64809","62729","84236","86284","58633","62729","46345","65832","84236"],"glyphesCoches":[false,false,false,false,false,false,false,false,false],"garde":false},` +
+    `{"id":"8980203","nom":"Idées Confuses Gribouillé","effetDeBaseTexte":"ATT : -5 D3 | REG : -5 | Vue : -3 | TOUR : +75 min | Effet de Zone","glyphesNumeros":["20752","101641","61720","74008","50473","9513","90396","57640"],"glyphesCoches":[false,false,false,false,false,false,false,false],"garde":false},` +
+    `{"id":"9033982","nom":"Traité de Clairvoyance Gribouillé","effetDeBaseTexte":"Vue : -6 | TOUR : -210 min","glyphesNumeros":["77101","91433","60697","59688","60719","77103","60697"],"glyphesCoches":[false,false,false,false,false,false,false],"garde":true},` +
+    `{"id":"9308040","nom":"Yeu'Ki'Pic Gribouillé","effetDeBaseTexte":"Vue : -6 | PV : +6 D3 | Effet de Zone","glyphesNumeros":["56593","54545","89377","51464","95509","89377","12560","54545","85269"],"glyphesCoches":[false,false,false,false,false,false,false,false,false],"garde":true},` +
+    `{"id":"10406560","nom":"Rune des Cyclopes Gribouillé","effetDeBaseTexte":"ATT : +5 D3 | DEG : +6 | Vue : -1 | Armure : +3 | Effet de Zone","glyphesNumeros":["57640","26924","37150","61742","92452","30990","6444"],"glyphesCoches":[false,false,false,false,false,false,false],"garde":true},` +
+    `{"id":"10542064","nom":"Yeu'Ki'Pic","effetDeBaseTexte":"Vue : -9 | Effet de Zone","glyphesNumeros":["52497","88340","32017","30992","47368","100640","54553","61720","80152","10504"],"glyphesCoches":[false,false,false,false,false,false,false,false,false,false],"garde":true},` +
+    `{"id":"10769725","nom":"Yeu'Ki'Pic","effetDeBaseTexte":"Vue : -9 | Effet de Zone","glyphesNumeros":["61722","45336","61720","95501","85269","11529","26892","61720","88344","23833"],"glyphesCoches":[false,false,false,false,false,false,false,false,false,false],"garde":true}]`;
+
