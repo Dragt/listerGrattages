@@ -969,6 +969,7 @@ class OutilListerGrattage {
         this.incomplets = [];
         this.filtre = {};
         this.zoneDateEnregistrement;
+        this.texteRecapitulatif;
 
         // idéalement une classe pour la gui, mais ici c'est encore restreint
         this.table;
@@ -986,6 +987,7 @@ class OutilListerGrattage {
     chargerDepuisHall() {
         // à mettre après préparation pour pouvoir table déjà créée ?
         this.viderTableParchemins();
+        this.viderTexteRecapitulatif();
         this.recuperateur = new Recuperateur(this);
         this.recuperateur.vaChercherParchemins();
         this.zoneDateEnregistrement.innerText = "Moment du chargement : " + new Date().toLocaleString();
@@ -1180,7 +1182,7 @@ class OutilListerGrattage {
         reponse += '<p><strong style="color:darkgreen">Détails parchemins gardés :</strong> ' + (htmlParcheminsModifies.length ? htmlParcheminsModifies.join('') : 'aucun') + '</p>';
         reponse += '<p><strong style="color:dimgrey">Détails parchemins inchangés :</strong> ' + (htmlParcheminsNonModifies.length ? htmlParcheminsNonModifies.join('') : 'aucun') + '</p>';
 
-        document.getElementById('recapitulatif').innerHTML = reponse;
+        this.texteRecapitulatif.innerHTML = reponse;
     }
 
 
@@ -1264,9 +1266,13 @@ class OutilListerGrattage {
             events: [{nom: 'click', fonction: this.afficherRecapitulatif, bindElement: this}],
             classesHtml: ['mh_form_submit'] });
 
-        Createur.elem('div', {                // si besoin de nom : const zoneRecapitulatif =
+        this.texteRecapitulatif = Createur.elem('div', {                // si besoin de nom : const zoneRecapitulatif =
             id: 'recapitulatif',
             parent: divBoutonRecapitulatif });
+    }
+
+    viderTexteRecapitulatif() {
+        this.texteRecapitulatif.innerHTML = "";
     }
 
     _attacherInterfaceFiltrer() {
@@ -1359,6 +1365,7 @@ class OutilListerGrattage {
             if (sauvegarde[0]) this.zoneDateEnregistrement.innerText = "Date de la sauvegarde : " + sauvegarde[0].dateEnregistrement;
             this.importerParchemins(sauvegarde);
             this.afficherParcheminsGardes();
+            this.viderTexteRecapitulatif();
         }
         else {
             alert('Aucune donnée trouvée localement.');
