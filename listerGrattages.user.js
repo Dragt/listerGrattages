@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name listerGrattages
+// @name listeGrattages
 // @namespace Violentmonkey Scripts
 // @include */mountyhall/MH_Play/Actions/Competences/userscriptGrattage
 // @include */mountyhall/MH_Play/Play_equipement.php
@@ -12,9 +12,11 @@
  * 1) Installez ce script dans Violent Monkey
  * 2) Connectez-vous à MH avec 2 PAs restants (session active)
  * 3) Ayez sur votre trõll les parchemins à analyser
+ * 4a) pour lancer l'outil, cliquer sur le bouton à côté des parchemins dans la page equipement
+ * 4b) ou alors rendez-vous à l'adresse : https://games.mountyhall.com/mountyhall/MH_Play/Actions/Competences/userscriptGrattage
  */
 
-/* 2019-06-01 v1.0 : version de base
+/* v1.0 : version de base
  * On peut cocher les glyphes à gratter pour voir directement l'effet final du parcho
  * On peut survoler le nom du parcho pour voir son effet initial
  * On peut survoler un glyphe pour voir les détails le concernant (je n'affiche juste pas les images)
@@ -23,7 +25,7 @@
  * Le bouton pour afficher un récapitulatif affiche en début de page les grattages indiqués pour les parchemins gardés, facile à copier/coller.
  * */
 
-/* 2019-06-02 v1.1 :
+/* v1.1 :
  * Affiche lite parchemins gardés et rejetés dans récapitulatif
  * Permet de supprimer des parchemins sur base d'une liste fournie
  * Affiche l'effet de base dans le récapitulatif
@@ -438,6 +440,9 @@ class ParcheminEnPage extends Parchemin {
             if (i != ZONE) {
                 valeursMax.push(this.calculerValeurMax(i, false));
             }
+            else {
+                valeursMax.push(-Infinity);
+            }
         }
         return valeursMax.indexOf(Math.max(...valeursMax));
     }
@@ -450,18 +455,19 @@ class ParcheminEnPage extends Parchemin {
                 for (let i = 0; i < g.caracteristiques.length; i++) {
                     if (g.caracteristiques[i].id == carac) {
                         if (ORIENTATIONS_GLYPHES[g.orientation].impact[i] > 0) {
-                            max += g.puissance - i;
+                            max += (g.puissance - i);
                             break;                    // si le premier est de la carac, le second ne le sera pas...
                         }
                         if (ORIENTATIONS_GLYPHES[g.orientation].impact[i] < 0) {
-                            if (cocher) g.cocher();            // la mise à jour du total se fait lros de l'affichage
+                            if (!((i == 1 && g.puissance == 1)) )  // si la valeur n'est pas 0 (deuxième carac à très gras)
+                                if (cocher) g.cocher();            // la mise à jour du total se fait lors de l'affichage
                             break;
                         }
                     }
                 }
             }
         }
-        displayDebug('calculerValeurMin / parchemin : ' + this.id + " / carac : " + carac + " / valeur : " + max);
+        displayDebug('calculerValeurMax / parchemin : ' + this.id + " / carac : " + carac + " / valeur : " + max);
         return max;
     }
 
@@ -469,7 +475,10 @@ class ParcheminEnPage extends Parchemin {
         const valeursMin = [];
         for(let i = 0; i < 10; i++) {
             if (i != ZONE) {
-                valeursMin.push(this.calculerValeurMin(i, false));
+                valeursMin[i] = this.calculerValeurMin(i, false);
+            }
+            else {
+                valeursMin[i] = Infinity;
             }
         }
         return valeursMin.indexOf(Math.min(...valeursMin));
@@ -477,15 +486,17 @@ class ParcheminEnPage extends Parchemin {
 
     calculerValeurMin(carac, cocher=false) {
         let min = 0;
-        for (const [i, g] of Object.entries(this.glyphes)) {
+        for (const g of this.glyphes) {
             if (!g.estSansEffet) {
                 for (let i = 0; i < g.caracteristiques.length; i++) {
                     if (g.caracteristiques[i].id == carac) {
                         if (ORIENTATIONS_GLYPHES[g.orientation].impact[i] < 0) {
-                            min -= g.puissance + i;  // attention deuxième carac -1 en puissance
+                            min -= (g.puissance - i);  // attention deuxième carac -1 en puissance
                         }
                         else if (ORIENTATIONS_GLYPHES[g.orientation].impact[i] > 0) {
-                            if (cocher) g.cocher();
+                            if (!((i == 1 && g.puissance == 1)) )
+                                if (cocher) g.cocher();
+                            //break;
                         }
                     }
                 }
@@ -937,6 +948,7 @@ class Recuperateur {
 
 // constructor(parent)
 // chargerDepuisHall()
+// construireIndex(index=this.parchemins)
 // recevoirParcheminsInfosBase(parcheminsRecus)
 // _appelerRechercherGlyphes(position)
 // recevoirParcheminInfosComposition(parcheminRecu)
@@ -970,6 +982,7 @@ class OutilListerGrattage {
         this.filtre = {};
         this.zoneDateEnregistrement;
         this.texteRecapitulatif;
+        this.index = [];              //ordre dans lequel afficher les parchemins, liste de positions (par rapport à this.parchemin)
 
         // idéalement une classe pour la gui, mais ici c'est encore restreint
         this.table;
@@ -978,16 +991,22 @@ class OutilListerGrattage {
         if (STATIQUE) {
             this.importerParchemins(JSON.parse(SAUVEGARDE));
             this.afficherParcheminsGardes();
+            //this.viderTexteRecapitulatif();
         }
         else {
             this.chargerLocalement();
         }
     }
 
+    construireIndex(listeParchemins=this.parchemins) {
+        this.index = listeParchemins.map((p, i) => i) ;
+    }
+
     chargerDepuisHall() {
         // à mettre après préparation pour pouvoir table déjà créée ?
         this.viderTableParchemins();
         this.viderTexteRecapitulatif();
+        this.index = [];
         this.recuperateur = new Recuperateur(this);
         this.recuperateur.vaChercherParchemins();
         this.zoneDateEnregistrement.innerText = "Moment du chargement : " + new Date().toLocaleString();
@@ -999,6 +1018,8 @@ class OutilListerGrattage {
         displayDebug("recevoirParcheminsInfosBase");
         displayDebug(parcheminsRecus);
         this.parchemins =  parcheminsRecus.map(p => new ParcheminEnPage(p.id, p.nom));
+        this.construireIndex(parcheminsRecus);
+
         // Attention requêtes pour les glyphes des différents parchemins les unes à la suite des autres, ne doivent pas se chevaucher
         compteurSecuriteNombreAppels = 0;
         this._appelerRechercherGlyphes(0);
@@ -1071,17 +1092,17 @@ class OutilListerGrattage {
     // TODO fournir en parametres un index de l'ordre des parchemins pour l'utiliser de manière universelle, avec le tri aussi
     afficherTousParchemins() {
         this.viderTableParchemins();
-        for (let i = 0; i < this.parchemins.length; i++) {
-            this._afficherParchemin(this.parchemins[i], i);
+        for (let i = 0; i < this.index.length; i++) {        // attention index
+            this._afficherParchemin(this.parchemins[this.index[i]], i);
         }
     }
 
     // TODO : un peu bizarre... le i affiche correspond au parchemin dans l'array ? Pour filtre pas comme ça je crois
     afficherParcheminsGardes() {
         this.viderTableParchemins();
-        for (let i = 0; i < this.parchemins.length; i++) {
-            if (this.parchemins[i].potentiellementInteressant) {
-                this._afficherParchemin(this.parchemins[i], i);
+        for (let i = 0; i < this.index.length; i++) {
+            if (this.parchemins[this.index[i]].potentiellementInteressant) {
+                this._afficherParchemin(this.parchemins[this.index[i]], i);
             }
         }
     }
@@ -1097,7 +1118,7 @@ class OutilListerGrattage {
         const zone = this.filtre.zone.checked;
         let parcheminsATrier = [];
 
-        for(const p of this.parchemins) {
+        for(const [i, p] of Object.entries(this.parchemins)) {
             let garde = true;
             let valeur;
 
@@ -1128,16 +1149,19 @@ class OutilListerGrattage {
                 }
             }
             p.potentiellementInteressant = garde;
-            if (garde) parcheminsATrier.push([p, valeur]);
+            //if (garde) // je les mets tous pour créer index complet, tri plus lourd évidemment, à tester
+            parcheminsATrier.push([i, valeur]);
         }
 
-        if (type == AU_MOINS) parcheminsATrier.sort((x, y) => (y[1] - x[1])); // TODO tri secondaire prédéfini, par exemple tours, dégats, ...
-        else if (type == AU_PLUS) parcheminsATrier.sort((x, y) => (x[1] - y[1]));
+        if (type == AU_MOINS) parcheminsATrier.sort((v1, v2) => (v2[1] - v1[1])); // TODO tri secondaire prédéfini, par exemple tours, dégats, ...
+        else if (type == AU_PLUS) parcheminsATrier.sort((v1, v2) => (v1[1] - v2[1]));
+        this.index = parcheminsATrier.map(x => x[0]);
 
-        this.viderTableParchemins();
-        for (let i = 0; i < parcheminsATrier.length; i++) {
-            this._afficherParchemin(parcheminsATrier[i][0], i);
-        }
+        this.afficherParcheminsGardes();
+        //this.viderTableParchemins();
+        //for (let i = 0; i < parcheminsATrier.length; i++) {
+        //    this._afficherParchemin(parcheminsATrier[i][0], i);
+        //}
     }
 
     // volontaire ici aussi d'appeler et d'afficher un à un petit à petit dans la dom,
@@ -1159,7 +1183,8 @@ class OutilListerGrattage {
         const parcheminsIdModifies = [];
         const parcheminsIdSupprimes = [];
 
-        for (const p of this.parchemins) {
+        for (let i = 0; i < this.index.length; i++) {
+            const p = this.parchemins[this.index[i]];
             if (!p.potentiellementInteressant) {
                 parcheminsIdSupprimes.push(p.id);
             }
@@ -1177,9 +1202,9 @@ class OutilListerGrattage {
             }
         }
 
-        let reponse = '<p><strong style="color:darkgreen">Parchemins gardés :</strong> ' + (parcheminsIdModifies.length ? parcheminsIdModifies.join(', ') : 'aucun') + '</p>';
+        let reponse = '<p><strong style="color:darkgreen">Parchemins cochés :</strong> ' + (parcheminsIdModifies.length ? parcheminsIdModifies.join(', ') : 'aucun') + '</p>';
         reponse += '<p><strong style="color:orangered">Parchemins rejetés :</strong> ' + (parcheminsIdSupprimes.length ? parcheminsIdSupprimes.join(', ') : 'aucun') + '</p>';
-        reponse += '<p><strong style="color:darkgreen">Détails parchemins gardés :</strong> ' + (htmlParcheminsModifies.length ? htmlParcheminsModifies.join('') : 'aucun') + '</p>';
+        reponse += '<p><strong style="color:darkgreen">Détails parchemins cochés :</strong> ' + (htmlParcheminsModifies.length ? htmlParcheminsModifies.join('') : 'aucun') + '</p>';
         reponse += '<p><strong style="color:dimgrey">Détails parchemins inchangés :</strong> ' + (htmlParcheminsNonModifies.length ? htmlParcheminsNonModifies.join('') : 'aucun') + '</p>';
 
         this.texteRecapitulatif.innerHTML = reponse;
@@ -1230,12 +1255,25 @@ class OutilListerGrattage {
             events: [{nom: 'click', fonction: this.sauvegarderLocalement, bindElement: this}],
             classesHtml: ['mh_form_submit'] });
 
-        Createur.elem('button', {                        // boutonSauvegarderLocalement
-            texte : 'Charger depuis votre inventaire (Hall)',
-            style: "margin: 10px",
-            parent: divBoutonsChargement,
-            events: [{nom: 'click', fonction: this.chargerDepuisHall, bindElement: this}],
-            classesHtml: ['mh_form_submit'] });
+        if (!STATIQUE) {
+            Createur.elem('button', {                        // boutonchargerDepuisHall
+                texte: 'Charger depuis votre inventaire (Hall)',
+                style: "margin: 10px",
+                parent: divBoutonsChargement,
+                events: [{nom: 'click', fonction: this.chargerDepuisHall, bindElement: this}],
+                classesHtml: ['mh_form_submit']
+            });
+        }
+        else {
+            Createur.elem('button', {                        // boutonchargerDepuisHall
+                texte: 'Charger depuis votre inventaire (Hall)',
+                style: "margin: 10px; background-color: grey",
+                parent: divBoutonsChargement,
+                attributs: [['disabled', 'true']],
+                events: [{nom: 'click', fonction: this.chargerDepuisHall, bindElement: this}],
+                classesHtml: ['mh_form_submit']
+            });
+        }
 
         this.zoneDateEnregistrement = Createur.elem('span', { style: "margin: 10px", parent: divBoutonsChargement });
     }
@@ -1290,7 +1328,8 @@ class OutilListerGrattage {
         html +=
             `<label style="margin:5px 0 5px 5px; padding:3px" for="puissanceRecherche">Puissance (-45 à 45) :</label>
             <input style="margin:5px 5px 5px 0; padding:3px" id="puissanceRecherche" name="puissanceRecherche" type="number" 
-            min="-50" max="50" step="1" value="0">`;
+            min="-50" max="50" step="1" value="0" 
+            title="Chaque points puissance a un impact sur l'effet. ATT, ESQ, PV => 1D3 / DEG, REG, PV, Vue, Duree, Zone => 1 / Tour => 15 min">`;
 
         html += `<select style="margin:5px; padding:3px" id="caracRecherche" name="caracRecherche" >`;
         html += `<option value="${TOUTES}">Toutes caracs</option>`;
@@ -1331,8 +1370,11 @@ class OutilListerGrattage {
 
 
     exporterParchemins() {
-        const dateEnregistrement = new Date().toLocaleString();
-        const sauvegarde = [];
+        const sauvegarde = {     // Sauvegarde pourrait avoir sa classe
+            parchemins: [],
+            index: this.index,
+            dateEnregistrement: new Date().toLocaleString()
+        };
         for (const p of this.parchemins) {
             let enregistrement = {
                 id: p.id,
@@ -1340,29 +1382,30 @@ class OutilListerGrattage {
                 effetDeBaseTexte: p.effetDeBaseTexte,
                 glyphesNumeros: [],
                 glyphesCoches: [],
-                garde: p.potentiellementInteressant,
-                dateEnregistrement: dateEnregistrement
+                garde: p.potentiellementInteressant
             };
             for(const g of p.glyphes) {
                 enregistrement.glyphesNumeros.push(g.numero);
                 enregistrement.glyphesCoches.push(Number(g.coche));
             }
-            sauvegarde.push(enregistrement);
+            sauvegarde.parchemins.push(enregistrement);
         }
         return sauvegarde;
     }
 
     importerParchemins(sauvegarde) {
         this.parchemins = [];
-        for (const enregistrement of sauvegarde) {
+
+        if (sauvegarde.dateEnregistrement) this.zoneDateEnregistrement.innerText = "Date de la sauvegarde : " + sauvegarde.dateEnregistrement;
+        for (const enregistrement of sauvegarde.parchemins) {
             this.parchemins.push(ParcheminEnPage.creerParchemin(enregistrement));
         }
+        this.index = sauvegarde.index;
     }
 
     chargerLocalement() {
         if (window.localStorage.getItem('sauvegardeListerGrattages')) {
             const sauvegarde = JSON.parse(window.localStorage.getItem('sauvegardeListerGrattages'));
-            if (sauvegarde[0]) this.zoneDateEnregistrement.innerText = "Date de la sauvegarde : " + sauvegarde[0].dateEnregistrement;
             this.importerParchemins(sauvegarde);
             this.afficherParcheminsGardes();
             this.viderTexteRecapitulatif();
@@ -1465,6 +1508,7 @@ if (STATIQUE) {
 
 if (window.location.pathname == urlOutilListerGrattage) {
     displayDebug("C'est parti !");
+    document.getElementsByTagName('body')[0]; // pour rapidement enlever la page d'erreur TODO faire autrement, voir solution Dabi
     new OutilListerGrattage();
 }
 
@@ -1475,13 +1519,12 @@ if (window.location.pathname == "/mountyhall/MH_Play/Play_equipement.php") {
 //--------------------- parchemins hardcodes --------------//
 
 const SAUVEGARDE =
-    `[{"id":"7083001","nom":"Rune Explosive Gribouillé","effetDeBaseTexte":"DEG : +4 | REG : -4 | Vue : -5 | PV : -2 D3 | TOUR : -15 min | Effet de Zone","glyphesNumeros":["102664","101645","50449","49424","54569","71944","70921"],"glyphesCoches":[true,true,true,false,false,false,false],"garde":true},` +
-    `{"id":"7190229","nom":"Traité de Clairvoyance","effetDeBaseTexte":"Vue : +5 | TOUR : -150 min","glyphesNumeros":["48393","99601","35112","45328","11529","76078","47384","55596","81199","24864"],"glyphesCoches":[false,false,false,false,false,false,false,false,false,false],"garde":false},` +
-    `{"id":"8781310","nom":"Rune des Foins Gribouillé","effetDeBaseTexte":"DEG : +4 | Vue : -1 | PV : -12 D3 | Armure : +4","glyphesNumeros":["64809","62729","84236","86284","58633","62729","46345","65832","84236"],"glyphesCoches":[false,false,false,false,false,false,false,false,false],"garde":false},` +
-    `{"id":"8980203","nom":"Idées Confuses Gribouillé","effetDeBaseTexte":"ATT : -5 D3 | REG : -5 | Vue : -3 | TOUR : +75 min | Effet de Zone","glyphesNumeros":["20752","101641","61720","74008","50473","9513","90396","57640"],"glyphesCoches":[false,false,false,false,false,false,false,false],"garde":false},` +
-    `{"id":"9033982","nom":"Traité de Clairvoyance Gribouillé","effetDeBaseTexte":"Vue : -6 | TOUR : -210 min","glyphesNumeros":["77101","91433","60697","59688","60719","77103","60697"],"glyphesCoches":[false,false,false,false,false,false,false],"garde":true},` +
-    `{"id":"9308040","nom":"Yeu'Ki'Pic Gribouillé","effetDeBaseTexte":"Vue : -6 | PV : +6 D3 | Effet de Zone","glyphesNumeros":["56593","54545","89377","51464","95509","89377","12560","54545","85269"],"glyphesCoches":[false,false,false,false,false,false,false,false,false],"garde":true},` +
-    `{"id":"10406560","nom":"Rune des Cyclopes Gribouillé","effetDeBaseTexte":"ATT : +5 D3 | DEG : +6 | Vue : -1 | Armure : +3 | Effet de Zone","glyphesNumeros":["57640","26924","37150","61742","92452","30990","6444"],"glyphesCoches":[false,false,false,false,false,false,false],"garde":true},` +
-    `{"id":"10542064","nom":"Yeu'Ki'Pic","effetDeBaseTexte":"Vue : -9 | Effet de Zone","glyphesNumeros":["52497","88340","32017","30992","47368","100640","54553","61720","80152","10504"],"glyphesCoches":[false,false,false,false,false,false,false,false,false,false],"garde":true},` +
-    `{"id":"10769725","nom":"Yeu'Ki'Pic","effetDeBaseTexte":"Vue : -9 | Effet de Zone","glyphesNumeros":["61722","45336","61720","95501","85269","11529","26892","61720","88344","23833"],"glyphesCoches":[false,false,false,false,false,false,false,false,false,false],"garde":true}]`;
+    `{"parchemins":[{"id":"4986515","nom":"Traité de Clairvoyance","effetDeBaseTexte":"Vue : +4 | TOUR : -120 min","glyphesNumeros":["94488","87335","38177","16672","29969","57632","56613","16672","72997","72999"],"glyphesCoches":[0,0,0,0,0,0,0,0,0,0],"garde":true},` +
+    `{"id":"8505213","nom":"Rune des Cyclopes","effetDeBaseTexte":"ATT : +4 D3 | DEG : +4 | Vue : -4","glyphesNumeros":["95521","75049","90396","26924","26902","97553","46369","85285","9509","78100"],"glyphesCoches":[0,0,0,0,0,0,0,0,0,0],"garde":true},` +
+    `{"id":"10769725","nom":"Yeu'Ki'Pic","effetDeBaseTexte":"Vue : -9 | Effet de Zone","glyphesNumeros":["61722","45336","61720","95501","85269","11529","26892","61720","88344","23833"],"glyphesCoches":[0,0,0,0,0,0,0,0,0,0],"garde":true},` +
+    `{"id":"10789472","nom":"Yeu'Ki'Pic","effetDeBaseTexte":"Vue : -9 | Effet de Zone","glyphesNumeros":["58649","99613","91417","62737","49416","71944","58649","3337","32033","60697"],"glyphesCoches":[0,0,0,0,0,0,0,0,0,0],"garde":true}],` +
+    `"index":[0,1,2,3],` +
+    `"dateEnregistrement":"11/06/2019 à 11:20:42"}`;
+
+
 
