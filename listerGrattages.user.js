@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name listeGrattagesv13
+// @name listerGrattages
 // @namespace Violentmonkey Scripts
 // @include */mountyhall/MH_Play/Actions/Competences/userscriptGrattage
 // @include */mountyhall/MH_Play/Play_equipement.php
