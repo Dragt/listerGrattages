@@ -30,6 +30,8 @@
 
 //-------------------------------- Debug Mode --------------------------------//
 
+const urlOutilListerGrattage = "/mountyhall/MH_Play/Actions/Competences/userscriptGrattage";
+
 let debugLevel = 0;
 
 function displayDebug(data, level = 1) {
@@ -123,12 +125,10 @@ function listerParchemins() {
 }
 
 function extraireParchemins() {
-	let htmlResponse = document.createElement('div');
-	htmlResponse.innerHTML = this.responseText;
+	const parser = new DOMParser();
+        const reponseHtml = parser.parseFromString(this.responseText, "text/html");
 	
-	//console.log(htmlResponse.innerHTML);
-	
-	for (let option of htmlResponse.querySelectorAll('optgroup option')) {
+	for (let option of reponseHtml.querySelectorAll('optgroup option')) {
 		parchemins.push(option.value);
 		parcheminsNoms[option.value] = option.innerHTML.split(' - ')[1];
 	}
@@ -162,10 +162,13 @@ function grattageAllerEtapeUn(parchemin) {
 
 function grattageAllerEtapeDeux(parchemin) {
 	displayDebug("grattageAllerEtapeDeux");
+
 	let htmlResponse = document.createElement('div');
 	htmlResponse.innerHTML = this.responseText;
+
+
 	
-	inputs = new FormData(htmlResponse.querySelector('#ActionForm'));
+	inputs = new FormData(reponseHtml.querySelector('#ActionForm'));
 	inputs.set('ai_IDTarget', parchemin);
 	
 	let xhr = new XMLHttpRequest();
@@ -176,13 +179,13 @@ function grattageAllerEtapeDeux(parchemin) {
 
 function extraireGlyphes(parchemin) {
 	displayDebug("extraireGlyphes");
-	let htmlResponse = document.createElement('div');
-	htmlResponse.innerHTML = this.responseText;
+	const parser = new DOMParser();
+        const reponseHtml = parser.parseFromString(this.responseText, "text/html");
 	
-	parcheminsEffetsBase[parchemin] = htmlResponse.querySelectorAll('td')[2].innerHTML;
+	parcheminsEffetsBase[parchemin] = reponseHtml.querySelectorAll('td')[2].innerHTML;
 	
 	let glyphes = [];
-	for (let image of htmlResponse.querySelectorAll(".l_grib1")) {
+	for (let image of reponseHtml.querySelectorAll(".l_grib1")) {
 		glyphes.push(image.src.split('Code=')[1]);
 	}
 	parcheminsGlyphes[parchemin] = glyphes;
@@ -835,11 +838,13 @@ function ajouteMiseEnForme(chaineATraiter, typeMiseEnForme) {
 //-------------------- Traitement de la page d'équipement --------------------//
 
 function ouvrirListe() {
+
 // Active le listing
 	prepareListing();
 	// À ce stade on est toujours sur Play_a_CompetenceYY: pas d'error img.
 	// On réécrit alors le frame de Contenu:
 	listerParchemins();
+
 }
 
 function traitementAction() {
