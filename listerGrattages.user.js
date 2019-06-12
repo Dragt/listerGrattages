@@ -1,10 +1,9 @@
 // ==UserScript==
 // @name listeGrattages
 // @namespace Violentmonkey Scripts
-// @include */mountyhall/MH_Play/Actions/Competences/userscriptGrattage
-// @include */mountyhall/MH_Play/Play_equipement.php
+// @include */mountyhall/MH_Play/Actions/Competences/Play_a_CompetenceYY.php*
 // @grant none
-// @version 1.2
+// @version 1.3
 // ==/UserScript==
 //
 
@@ -43,18 +42,29 @@ function displayDebug(data, level = 1) {
 
 displayDebug(window.location.href);
 
+//----------------------------- Initialisation  ------------------------------//
+
+// Comme il s'agit d'une url multi-usage, on vérifie qu'on est bien
+// sur le lancement d'un grattage
+if (document.body.id == "p_competencegrattage") {
+	traitementAction();
+} else {
+	displayDebug("Ceci n'est pas un grattage: abandon");
+}
+
 //---------------------- Gestion de la page de Listing -----------------------//
 
-function preparePageListing() {
-	document.getElementsByTagName('body')[0].innerHTML =
-		'<p>Pour que l\'outil fonctionne, vous devez être <strong>connecté</strong> à Mountyhall et disposer de <strong>au moins 2 PA</strong>.<br>' +
-		'Pour chaque parchemin sur vous, vous ferez 2 appels au serveur mountyhall. Utilisez cet outil de manière responsable.<br>' +
+function prepareListing() {
+	Contenu.body.innerHTML =
+		//'<p>Pour que l\'outil fonctionne, vous devez être <strong>connecté</strong> à Mountyhall et disposer de <strong>au moins 2 PA</strong>.<br>' +
+		// => inutile, si on arrive ici c'est que c'est le cas.
+		'<p>Pour chaque parchemin traité, vous faites 2 appels au serveur mountyhall. Merci d\'utiliser cet outil de manière responsable.<br>' +
 		'Non testé avec des parchemins "spéciaux". (mission, sortilège...)<br>' +
 		'Survolez avec la souris les noms des parchemins pour voir les effets initiaux. Survolez les glyphes pour voir les détails.</p>';
-	document.getElementsByTagName('body')[0].style.padding = '20px';
+	Contenu.body.style.padding = '20px';
 	
 	let divParcheminsASupprimer = document.createElement('div');
-	document.getElementsByTagName('body')[0].appendChild(divParcheminsASupprimer);
+	Contenu.body.appendChild(divParcheminsASupprimer);
 	
 	let boutonSupprimerParchemins = document.createElement('button');
 	boutonSupprimerParchemins.appendChild(document.createTextNode('Supprimer parchemins'));
@@ -70,30 +80,33 @@ function preparePageListing() {
 	divParcheminsASupprimer.appendChild(inputParcheminsASupprimer);
 	
 	let divBoutonRecapitulatif = document.createElement('div');
-	document.getElementsByTagName('body')[0].appendChild(divBoutonRecapitulatif);
+	Contenu.body.appendChild(divBoutonRecapitulatif);
 	let boutonAfficherRecapitulatif = document.createElement('button');
 	boutonAfficherRecapitulatif.style.margin = '10px';
-	boutonAfficherRecapitulatif.style.width = window.getComputedStyle(boutonSupprimerParchemins).getPropertyValue("width");
+	//boutonAfficherRecapitulatif.style.width = window.getComputedStyle(boutonSupprimerParchemins).getPropertyValue("width");
+	// à adapter aux frames
 	boutonAfficherRecapitulatif.appendChild(document.createTextNode('Afficher Récapitulatif'));
 	boutonAfficherRecapitulatif.addEventListener('click', afficherRecapitulatif);
 	divBoutonRecapitulatif.appendChild(boutonAfficherRecapitulatif);
 	
 	let zoneRecapitulatif = document.createElement('div');
 	zoneRecapitulatif.setAttribute('id', 'recapitulatif');
-	document.getElementsByTagName('body')[0].appendChild(zoneRecapitulatif);
+	Contenu.body.appendChild(zoneRecapitulatif);
 	
 	let table = document.createElement('table');
 	table.id = "Dragtable";
 	//table.innerHTML = '<tr><th>parchemin</th><th>Effets (total et glyhpes)</th></tr>';
 	
-	document.getElementsByTagName('body')[0].appendChild(table);
+	Contenu.body.appendChild(table);
 }
 
 //const urlGrattage = "https://games.mountyhall.com/mountyhall/MH_Play/Actions/Competences/Play_a_CompetenceYY.php??ai_CoutPA=2&ai_JetComp=90&ai_IdComp=26&as_NomComp=Grattage&ab_FlagUse=0&ai_Concentration=0&ai_IDTarget=";
 // https://games.mountyhall.com/mountyhall/MH_Play/Play_action.php?x=28&y=12&as_Action=ACTION+%21%21&as_SelectName=%A0%A0Grattage+%282+PA%29+-+82+%25&as_Action2=&ai_ToDo=126
 // https://games.mountyhall.com/mountyhall/MH_Play/Actions/Play_a_Competence.php?ai_IdComp=26&ai_IDTarget=
 //const urlGrattage =   "https://games.mountyhall.com/mountyhall/MH_Play/Actions/Competences/Play_a_CompetenceYY.php??ai_CoutPA=2&ai_JetComp=82&ai_IdComp=26&as_NomComp=Grattage&ab_FlagUse=0&ai_Concentration=0&ai_IDTarget=";
-const urlGrattage = "https://games.mountyhall.com/mountyhall/MH_Play/Actions/Play_a_Competence.php?ai_IdComp=26&ai_IDTarget=";
+const urlGrattage = window.location.origin + "/mountyhall/MH_Play/Actions/Play_a_Competence.php?ai_IdComp=26";
+const urlGrattage2 = window.location.origin + "/mountyhall/MH_Play/Actions/Competences/Play_a_Competence26b.php";
+const Contenu = top.frames["Main"].frames["Contenu"].document;
 let parchemins = [];
 let parcheminsNoms = {};
 let parcheminsEffetsBase = {};
@@ -103,12 +116,6 @@ let parcheminsGlyphes = {};
 let glyphesCoches = {};
 let nombreParchemins = 0;
 let parcheminTraite = 0;
-
-if (window.location.pathname == urlOutilListerGrattage) {
-	preparePageListing();
-	listerParchemins();
-}
-
 
 function listerParchemins() {
 	let xhr = new XMLHttpRequest();
@@ -155,9 +162,11 @@ function grattageAllerEtapeUn(parchemin) {
 
 function grattageAllerEtapeDeux(parchemin) {
 	displayDebug("grattageAllerEtapeDeux");
-	const urlGrattage2 = "https://games.mountyhall.com/mountyhall/MH_Play/Actions/Competences/Play_a_Competence26b.php";
-	const parser = new DOMParser();
-        const reponseHtml = parser.parseFromString(this.responseText, "text/html");
+
+	let htmlResponse = document.createElement('div');
+	htmlResponse.innerHTML = this.responseText;
+
+
 	
 	inputs = new FormData(reponseHtml.querySelector('#ActionForm'));
 	inputs.set('ai_IDTarget', parchemin);
@@ -189,7 +198,7 @@ function extraireGlyphes(parchemin) {
 function traiterGlyphes(parchemin) {
 	displayDebug("traiterGlyphes");
 	let
-		table = document.getElementById("Dragtable"),
+		table = Contenu.getElementById("Dragtable"),
 		analyse = analyseGribouillages(parcheminsGlyphes[parchemin].join(' '));
 	displayDebug(analyse, 2);
 	
@@ -293,7 +302,7 @@ function cliquerCheckboxGlyphe() {
 	let infosGlyphes = this.id.split('-');
 	let parchemin = infosGlyphes[0];
 	let indiceGlyphe = infosGlyphes[2];
-	let glyphe = document.getElementById(parchemin + '-glyphe-' + indiceGlyphe);
+	let glyphe = Contenu.getElementById(parchemin + '-glyphe-' + indiceGlyphe);
 	
 	if (this.checked) {
 		glyphe.style.opacity = 0.25;
@@ -310,14 +319,14 @@ const SANS_EFFET = 57632;
 function rafraichirEffetTotal(parchemin) {
 	let parcheminGratte = parcheminsGlyphes[parchemin].map((e, i) => glyphesCoches[parchemin][i] ? SANS_EFFET : e );
 	let analyse = analyseGribouillages(parcheminGratte.join(' '));
-	document.getElementById(parchemin + "-effet").innerHTML = analyse.effetParchemin;
-	parcheminsEffetFinal[parchemin] = document.getElementById(parchemin + "-effet").innerHTML;
+	Contenu.getElementById(parchemin + "-effet").innerHTML = analyse.effetParchemin;
+	parcheminsEffetFinal[parchemin] = Contenu.getElementById(parchemin + "-effet").innerHTML;
 }
 
 function supprimerParchemins() {
-	let parcheminsASupprimer = document.getElementById('parcheminsASupprimer').value.replace(/\s/g, "").split(',');
+	let parcheminsASupprimer = Contenu.getElementById('parcheminsASupprimer').value.replace(/\s/g, "").split(',');
 	for (let p of parcheminsASupprimer) {
-		let boutonSupprimer = document.getElementById(p + '-supprimer');
+		let boutonSupprimer = Contenu.getElementById(p + '-supprimer');
 		if (boutonSupprimer) supprimerParchemin.call(boutonSupprimer);
 	}
 }
@@ -349,7 +358,7 @@ function afficherRecapitulatif() {
 	reponse += '<p><strong>parchemins gardés :</strong> ' + parcheminsFiltres.join(', ') + '</p>';
 	reponse += '<p><strong>parchemins rejetés :</strong> ' + Object.keys(parcheminsSupprimes).join(', ') + '</p>';
 	
-	document.getElementById('recapitulatif').innerHTML = reponse;
+	Contenu.getElementById('recapitulatif').innerHTML = reponse;
 }
 
 
@@ -828,77 +837,37 @@ function ajouteMiseEnForme(chaineATraiter, typeMiseEnForme) {
 
 //-------------------- Traitement de la page d'équipement --------------------//
 
-function getNumTroll() {
-// Récupère le num de trõll dans la frame Menu
-// Menu = top.frames["Sommaire"].document
-// onclick du nom du trõll: "EnterPJView(numTroll,750,550)"
-// Faudrait vraiment coller des id dans l'équipement...
-	let
-		liens,
-		str,
-		numTroll = false;
-	try {
-		liens = top.frames["Sommaire"].document.getElementsByTagName("a");
-	} catch(e) {
-		displayDebug(e);
-		return false;
-	}
-	
-	if(liens.length>0 && liens[0].onclick!==void(0)) {
-		str = liens[0].onclick.toString();
-		numTroll = parseInt(/\d+/.exec(str)[0]);
-		displayDebug("numTroll = "+numTroll);
-	}
-	return numTroll;
-}
-
 function ouvrirListe() {
-// Ouvre la page de listing
-	// Ouvrir dans un nouvel onglet:
-	//window.open(urlOutilListerGrattage);
-	// Ouvrir dans la frame de contenu:
-	window.location.assign(urlOutilListerGrattage);
+
+// Active le listing
+	prepareListing();
+	// À ce stade on est toujours sur Play_a_CompetenceYY: pas d'error img.
+	// On réécrit alors le frame de Contenu:
+	listerParchemins();
+
 }
 
-function traitementEquipement() {
-// Ajout du lien dans l'équipement
-	displayDebug("traitementEquipement");
+function traitementAction() {
+// Ajout du lien dans la frame d'action
+	displayDebug("traitementAction");
 	let
-		numTroll = getNumTroll(),
-		tr, td, btn,
-		titreParchos;
-	
-	if (!numTroll) {
-		displayDebug("Numéro de Trõll non trouvé : abandon");
+		insertPoint = document.getElementsByClassName("titre4")[1],
+		div, btn;
+	if (insertPoint == void(0)) {
+		displayDebug("Emplacement d'insertion non trouvé");
 		return;
 	}
-	tr = document.getElementById("mh_objet_hidden_"+numTroll+"Parchemin");
-	if(!tr) {
-		displayDebug("Table des parchos non trouvée : abandon");
-		return;
-	}
+	displayDebug(insertPoint, 2);
 	
-	// Récupération de la ligne de titre des parchos
-	// titreParchos.cells:
-	// 0: [+] / [-]
-	// 1: "Parchemin"
-	// 2: nb parchos
-	// 3: poids total
-	titreParchos = document.evaluate(
-		"./preceding-sibling::tr[1]//table//tr[1]",
-		tr, null, 9, null
-	).singleNodeValue;
-	titreParchos.cells[1].style.width = "100px";
-	td = titreParchos.insertCell(2);
+	// Création du bouton pour lancer le listing
 	btn = document.createElement("input");
 	btn.type = "button";
 	btn.className = "mh_form_submit";
 	btn.value = "Lister les grattages";
 	btn.onclick = ouvrirListe;
-	td.appendChild(btn);
-}
-
-if (window.location.pathname == "/mountyhall/MH_Play/Play_equipement.php") {
-	traitementEquipement();
+	div = document.createElement("div");
+	div.style.textAlign = "center";
+	div.appendChild(btn);
+	insertPoint.parentNode.insertBefore(div, insertPoint.nextElementSibling);
 }
 
