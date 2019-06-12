@@ -14,9 +14,11 @@
  * 3) Ayez sur votre trõll les parchemins à analyser
  * 4a) pour lancer l'outil, cliquer sur le bouton à côté des parchemins dans la page equipement
  * 4b) ou alors rendez-vous à l'adresse : https://games.mountyhall.com/mountyhall/MH_Play/Actions/Competences/userscriptGrattage
+ *
+ * Pour l'utiliser comme un script js classique lié à une page html, simplement mettre la constante STATIQUE à 1
  */
 
-/* v1.0 : version de base
+/* 2019-06-01 v1.0 : version de base
  * On peut cocher les glyphes à gratter pour voir directement l'effet final du parcho
  * On peut survoler le nom du parcho pour voir son effet initial
  * On peut survoler un glyphe pour voir les détails le concernant (je n'affiche juste pas les images)
@@ -25,7 +27,7 @@
  * Le bouton pour afficher un récapitulatif affiche en début de page les grattages indiqués pour les parchemins gardés, facile à copier/coller.
  * */
 
-/* v1.1 :
+/* 2019-06-02 v1.1 :
  * Affiche lite parchemins gardés et rejetés dans récapitulatif
  * Permet de supprimer des parchemins sur base d'une liste fournie
  * Affiche l'effet de base dans le récapitulatif
@@ -41,7 +43,8 @@
  * refactoring complet pour rigoler
  * améliorations affichages résumé
  * Possibilité de filtrer et trier
- * Possibilité d'enregistrer et charger localement, plus de chargement automatique depuis le hall
+ * Possibilité d'enregistrer et charger localement, en plus du chargement automatique depuis le hall
+ * Possibilité d'importer et d'exporter au format texte
  */
 
 // ****************************************************************************************************************************
@@ -453,6 +456,7 @@ class ParcheminEnPage extends Parchemin {
         for (const g of this.glyphes) {
             if (!g.estSansEffet) {
                 for (let i = 0; i < g.caracteristiques.length; i++) {
+
                     if (g.caracteristiques[i].id == carac) {
                         if (ORIENTATIONS_GLYPHES[g.orientation].impact[i] > 0) {
                             max += (g.puissance - i);
@@ -982,16 +986,15 @@ class OutilListerGrattage {
         this.filtre = {};
         this.zoneDateEnregistrement;
         this.texteRecapitulatif;
-        this.index = [];              //ordre dans lequel afficher les parchemins, liste de positions (par rapport à this.parchemin)
-
+        // index pour connaitre ordre dans lequel afficher les parchemins, liste de positions (par rapport à this.parchemin)
+        // pour le moment il n'y a pas de raison vraiment convaincante à ne jamais toucher directement à l'ordre initial de this.parchemins ?
+        this.index = [];
         // idéalement une classe pour la gui, mais ici c'est encore restreint
         this.table;
         this._preparerPageListe();
 
         if (STATIQUE) {
-            this.importerParchemins(JSON.parse(SAUVEGARDE));
-            this.afficherParcheminsGardes();
-            //this.viderTexteRecapitulatif();
+            this.importerParcheminsEtAfficher(JSON.parse(SAUVEGARDE));
         }
         else {
             this.chargerLocalement();
@@ -1120,10 +1123,10 @@ class OutilListerGrattage {
 
         for(const [i, p] of Object.entries(this.parchemins)) {
             let garde = true;
-            let valeur;
+            let valeur = ((type == AU_MOINS) ? -Infinity : Infinity); // besoin d'initialiser pour que le tri fonctionnne
 
             if (zone) {
-                if (p.calculerValeurMax(ZONE, true) <= 0) garde = false;
+                if (p.calculerValeurMax(ZONE, false) <= 0) garde = false; // pourrait mettre à true si on veut coher pour un max effet de zone
             }
 
             if (garde) {
@@ -1241,24 +1244,38 @@ class OutilListerGrattage {
     _attacherBoutonsChargement() {
         const divBoutonsChargement = Createur.elem('div', { parent: this.zone, style: "margin:0vmin; padding:0.1vmin; border:solid 0px black" });
 
+        Createur.elem('button', {                        // boutonSauvegarderLocalement
+            texte : 'Sauvegarder (dans navigateur)',
+            style: "margin: 10px 5px 10px 10px; background-color: #0074D9", // bleu
+            parent: divBoutonsChargement,
+            events: [{nom: 'click', fonction: this.sauvegarderLocalement, bindElement: this}],
+            classesHtml: ['mh_form_submit'] });
+
         Createur.elem('button', {                       // boutonChargerLocalement
-            texte : 'Charger le dernier état (local)',
-            style: "margin: 10px",
+            texte : 'Charger (depuis navigateur)',
+            style: "margin: 10px 20px 10px 5px",
             parent: divBoutonsChargement,
             events: [{nom: 'click', fonction: this.chargerLocalement, bindElement: this}],
             classesHtml: ['mh_form_submit'] });
 
-        Createur.elem('button', {                        // boutonSauvegarderLocalement
-            texte : 'Sauvegarder l\'état Actuel (local)',
-            style: "margin: 10px",
+        Createur.elem('button', {                       // boutonChargerLocalement
+            texte : 'Importer (texte)',
+            style: "margin: 10px 5px 10px 20px",
             parent: divBoutonsChargement,
-            events: [{nom: 'click', fonction: this.sauvegarderLocalement, bindElement: this}],
+            events: [{nom: 'click', fonction: this.validerImport, bindElement: this}],
+            classesHtml: ['mh_form_submit'] });
+
+        Createur.elem('button', {                       // boutonChargerLocalement
+            texte : 'Exporter (texte)',
+            style: "margin: 10px 20px 10px 5px",
+            parent: divBoutonsChargement,
+            events: [{nom: 'click', fonction: this.afficherExport, bindElement: this}],
             classesHtml: ['mh_form_submit'] });
 
         if (!STATIQUE) {
             Createur.elem('button', {                        // boutonchargerDepuisHall
                 texte: 'Charger depuis votre inventaire (Hall)',
-                style: "margin: 10px",
+                style: "margin: 10px 20px 10px 20px; background-color: #FF851B", //orange
                 parent: divBoutonsChargement,
                 events: [{nom: 'click', fonction: this.chargerDepuisHall, bindElement: this}],
                 classesHtml: ['mh_form_submit']
@@ -1267,7 +1284,7 @@ class OutilListerGrattage {
         else {
             Createur.elem('button', {                        // boutonchargerDepuisHall
                 texte: 'Charger depuis votre inventaire (Hall)',
-                style: "margin: 10px; background-color: grey",
+                style: "margin: 10px 20px 10px 20px; background-color: #AAAAAA", // gris
                 parent: divBoutonsChargement,
                 attributs: [['disabled', 'true']],
                 events: [{nom: 'click', fonction: this.chargerDepuisHall, bindElement: this}],
@@ -1342,7 +1359,7 @@ class OutilListerGrattage {
 
         html +=
             `<input style="margin:5px 0 5px 5px; padding:3px" id="effetZoneObligatoire" name="effetZoneObligatoire" type="checkbox">
-              <label style="margin:5px 5px 5px 0; padding:3px" for="effetZoneObligatoire">Effet de zone obligatoire</label>`
+              <label style="margin:5px 5px 5px 0; padding:3px" for="effetZoneObligatoire">Effet de zone possible</label>`
 
         html +=
             `<button style="margin:5px; padding:3px" class="mh_form_submit" id="boutonRecherche">Filtrer et Trier</button>`;
@@ -1368,7 +1385,7 @@ class OutilListerGrattage {
         this.table.innerHTML = "";
     }
 
-
+    // renvoie un objet sauvegarde
     exporterParchemins() {
         const sauvegarde = {     // Sauvegarde pourrait avoir sa classe
             parchemins: [],
@@ -1393,6 +1410,7 @@ class OutilListerGrattage {
         return sauvegarde;
     }
 
+    // reçoit un objet sauvergarde
     importerParchemins(sauvegarde) {
         this.parchemins = [];
 
@@ -1403,24 +1421,67 @@ class OutilListerGrattage {
         this.index = sauvegarde.index;
     }
 
+    importerParcheminsEtAfficher(sauvegarde) {
+        this.importerParchemins(sauvegarde)
+        this.afficherParcheminsGardes();
+        this.viderTexteRecapitulatif();
+    }
+
     chargerLocalement() {
         if (window.localStorage.getItem('sauvegardeListerGrattages')) {
             const sauvegarde = JSON.parse(window.localStorage.getItem('sauvegardeListerGrattages'));
-            this.importerParchemins(sauvegarde);
-            this.afficherParcheminsGardes();
-            this.viderTexteRecapitulatif();
+            this.importerParcheminsEtAfficher(sauvegarde);
         }
         else {
             alert('Aucune donnée trouvée localement.');
         }
     }
 
-    // TODO ne sauvegarde pas l'ordre des parchemins... faudrait y réfléhir, serait facile de trier la liste d'origine...
     sauvegarderLocalement() {
         const sauvegardeTexte = JSON.stringify(this.exporterParchemins());
-        console.log(sauvegardeTexte);
+        console.log(sauvegardeTexte); // normalement il y a l'export pour ça...
         window.localStorage.setItem('sauvegardeListerGrattages', sauvegardeTexte);
-        alert ('Etat sauvegardé. (A priori.)');
+        alert("Etat sauvegardé.");
+    }
+
+    validerImport() {
+        const introduit = prompt ("Collez l'enregistrement (Ctrl+V) à importer :", "");
+        let sauvegarde;
+        if (introduit) {
+            try {
+                sauvegarde = JSON.parse(introduit);
+                this.importerParcheminsEtAfficher(sauvegarde);
+                alert("Enregistrement importé.");
+            }
+            catch (e) {
+                alert("Problème rencontré lors de l'import");
+                console.log(e);
+            }
+        }
+    }
+
+    afficherExport() {
+        // Ouch, le default value de chrome c'est maximum 2000 carac. Infini pour les autres... infini à l'insertion
+        //prompt(" Voici l'enregistrement à copier (Ctrl+C) pour ensuite l'importer manuellement :",
+        //JSON.stringify(this.exporterParchemins()));
+
+        // Et pas possible de copier directement dans clipboard?... donc passer par un élément...
+        copierDansPressePapier(this.exporterParchemins());
+        alert("L'enregistrement est copié dans le presse-papier.\n" +
+            "Vous pouvez maintenant le copier (Ctrl+v).");
+
+        function copierDansPressePapier(texte) {
+            // Create new element
+            const textarea = document.createElement('textarea');
+            textarea.value = JSON.stringify(texte);
+            textarea.setAttribute('readonly', '');
+            // ta.style.display = 'none'; // doit être visible pour être sélectionné? ...
+            textarea.style = {position: 'absolute', left: '-9999px'}; // donc on le fout n'importe où
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+        }
     }
 
 }
@@ -1508,7 +1569,6 @@ if (STATIQUE) {
 
 if (window.location.pathname == urlOutilListerGrattage) {
     displayDebug("C'est parti !");
-    document.getElementsByTagName('body')[0]; // pour rapidement enlever la page d'erreur TODO faire autrement, voir solution Dabi
     new OutilListerGrattage();
 }
 
@@ -1525,6 +1585,3 @@ const SAUVEGARDE =
     `{"id":"10789472","nom":"Yeu'Ki'Pic","effetDeBaseTexte":"Vue : -9 | Effet de Zone","glyphesNumeros":["58649","99613","91417","62737","49416","71944","58649","3337","32033","60697"],"glyphesCoches":[0,0,0,0,0,0,0,0,0,0],"garde":true}],` +
     `"index":[0,1,2,3],` +
     `"dateEnregistrement":"11/06/2019 à 11:20:42"}`;
-
-
-
