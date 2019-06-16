@@ -2,11 +2,13 @@
 // @name listeGrattages
 // @namespace Violentmonkey Scripts
 // @include */mountyhall/MH_Play/Actions/Competences/userscriptGrattage
+// @include */maListeParchemins/grattage*
 // @include */mountyhall/MH_Play/Play_equipement.php*
 // @grant none
 // @version 1.6
 // ==/UserScript==
 //
+
 
 /* Utilisation :
  * 1) Installez ce script dans Violent Monkey
@@ -95,6 +97,7 @@ let compteurSecuriteNombreAppels = 0;
 
 // attention au include Violent Monkey qui doit correspondre
 const urlOutilListerGrattage = "/mountyhall/MH_Play/Actions/Competences/userscriptGrattage";
+const urlAutreQueMountihall = "/maListeParchemins/grattage.html";
 
 // affichage bonus malus
 const COULEUR_BONUS = '#336633'; // vert '336633'
@@ -569,6 +572,8 @@ class ParcheminEnPage extends Parchemin {
         return min;
     }
 
+    // TODO : décider ce qui est fait exactement ici : total puissance ? total puissance positive ou négative?
+    // TODO : Multiplié par la durée ou non ? Qui des PV qui sont directs ? Bref, comme c'est ça donne déjà une indication...
     calculerTotalPuissances() {
         let total = 0;
         let duree = 0;
@@ -1242,6 +1247,8 @@ const CRITERE_ID = 91;
 const IMPORTER_COMPLETER = 1;
 const IMPORTER_REMPLACER = 2;
 
+const PAS_DE_CHARGEMENT_MH = 5;
+
 // constructor(parent)
 // chargerDepuisHall()
 // construireIndex(index=this.parchemins)
@@ -1270,7 +1277,7 @@ const IMPORTER_REMPLACER = 2;
 
 // TODO exploser la classe en plusieurs, elle fait trop de choses
 class OutilListerGrattage {
-    constructor(parent) {
+    constructor(parent, optionChargement) {
         this.parent = parent;
         this.zone;
         this.parchemins = {};
@@ -1290,6 +1297,8 @@ class OutilListerGrattage {
 
         this.parcheminsEnCoursDAjout = {};
         this.indexEnCoursDAjout = [];
+
+        this.optionChargement = optionChargement;
 
         // date de creation... on s'en fiche, date d'ajout premier parcho plus intéressante... sinon serait remplacé lors de nouveaux imports
         // date de dernier (et premier) ajout peut être retrouvé en regardant les dates d'ajout des parchemins
@@ -1660,7 +1669,7 @@ class OutilListerGrattage {
 
         this._attacherMessageIntro();
         this._attacherBoutonsChargement();
-        this._attacherBoutonsChargementHall();
+        if (this.optionChargement !== PAS_DE_CHARGEMENT_MH) this._attacherBoutonsChargementHall();
         this._attacherInterfaceSupprimerParchemins();
         this._attacherInterfaceRecapituler();
         this._attacherInterfaceFiltrer();
@@ -2351,6 +2360,14 @@ if (STATIQUE) {
 if (window.location.pathname == urlOutilListerGrattage) {
     displayDebug("C'est parti !");
     new OutilListerGrattage();
+}
+
+// si un jour les données sont ailleurs, pour l'utiliser sans être connecté à MH...
+// là deux domaines différents donc 2 local storages différents
+if (window.location.pathname == urlAutreQueMountihall) {
+    displayDebug("C'est parti sans chargement!");
+    document.body.innerHTML = "";
+    new OutilListerGrattage(document.body, PAS_DE_CHARGEMENT_MH);
 }
 
 if (window.location.pathname == "/mountyhall/MH_Play/Play_equipement.php") {
