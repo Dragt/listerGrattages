@@ -1398,6 +1398,7 @@ class OutilListerGrattage {
     Etes-vous bien connecté à MH ? 
     Avez-vous encore 2 PA ? 
     Connaissez-vous la compétence Gratter ?`);
+            this.debloquerBoutonsChargement();
             return;
         }
 
