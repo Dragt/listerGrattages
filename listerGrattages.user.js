@@ -5,7 +5,7 @@
 // @include */maListeParchemins/grattage*
 // @include */mountyhall/MH_Play/Play_equipement.php*
 // @grant none
-// @version 1.6
+// @version 1.7
 // ==/UserScript==
 //
 
@@ -70,6 +70,16 @@
  * possibilité de cacher tous les parchemins neutres
  * ajout du tri en "combinaison"
  * enregistrement des dates d'ajouts de parchemin
+ */
+
+/* v1.7
+ * groupe "pas toucher" ajouté
+ * suppression de la possibilité de "cacher"
+ * amélioration du rapport récapitulatif
+ * plus d'infos lors du survol de la souris
+ * possibilité d'afficher les parchemins sur soi.
+ * possibilité de supprimer un parchemin (et non plus de définir une liste comme mauvais)
+ * sauvegarde les critères d'affichage
  */
 
 // ****************************************************************************************************************************
@@ -423,10 +433,12 @@ class Parchemin {
 
 //************************* Classe ParcheminEnPage *************************
 
+const QUALITE_PAS_TOUCHER = 2;
 const QUALITE_BON = 1;
 const QUALITE_NEUTRE = 0;
 const QUALITE_MAUVAIS = -1;
 const QUALITE_TERMINE = 9;
+const QUALITE_SUR_MOI = 20;
 // constructor(id, nom, effetDeBaseTexte, glyphes)
 // get cochagesGlyphes
 // get effetTotalHtml
@@ -613,25 +625,26 @@ class ParcheminEnPage extends Parchemin {
 
         this.boutonBon = Createur.elem('button', {
             id: this.id + '-boutonBon',
-            attributs: [['title', 'Définir ce parchemin comme "bon".\nL\'objectif est de marquer les marchemins estimés bons à gratter, pour pouvoir facilement produire la liste des détails des parchemins à gratter.']],
+            attributs: [['title', 'Définir ce parchemin comme "à gratter".\nL\'objectif est de marquer les marchemins estimés bons à gratter, pour pouvoir facilement produire la liste des détails des parchemins à gratter.']],
             enfants: [document.createTextNode('V')],
             events: [{nom: 'click', fonction: this.changerQualite, bindElement: this, param: [QUALITE_BON, true]}],
             classesHtml: ['mh_form_submit'],
             style: "background-color: #c9d8c5; margin: 5px", // vert #c9d8c5 // bleu  #a8b6bf // orange #edd9c0
         });
 
+        // boutonCacher evenu bouton des pas toucher
         this.boutonCacher = Createur.elem('button', {
-            id: this.id + '-boutonCacher',
-            attributs: [['title', 'Cacher ce parchemin temporairement.\nL\'objectif est de retirer temporairement des parchemins de la liste. Ils redeviendront visibles lors d\'un tri/filtre ou en cliquant sur le bouton servant à les faire réapparaitre.']],
+            id: this.id + '-boutonPasToucher',
+            attributs: [['title', 'Définir que ce parchemin "pas toucher".\nL\'objectif est d\'indiquer que ce parchemin doit être gardé tel quel.']],
             enfants: [document.createTextNode('_')],
-            events: [{nom: 'click', fonction: this.cacherParchemin, bindElement: this}],
+            events: [{nom: 'click', fonction: this.changerQualite, bindElement: this, param: [QUALITE_PAS_TOUCHER, true]}],
             classesHtml: ['mh_form_submit'],
             style: "background-color: #a8b6bf; margin: 5px", // bleu
         });
 
         this.boutonMauvais = Createur.elem('button', {
             id: this.id + '-boutonMauvais',
-            attributs: [['title', 'Définir ce parchemin comme "mauvais"\nL\'objectif est de ne plus voir les parchemins impropres au grattage et à l\'utilisation et de pouvoir ensuite les lister facilement (pour savoir lesquels utiliser pour construire des golems de papier ou pour goinfrre par exemple).']],
+            attributs: [['title', 'Définir ce parchemin comme "mauvais"\nL\'objectif est de ne plus voir les parchemins impropres au grattage et à l\'utilisation et de pouvoir ensuite les lister facilement (pour savoir lesquels utiliser pour construire des golems de papier ou pour goinfrer par exemple).']],
             enfants: [document.createTextNode('X')],
             events: [{nom: 'click', fonction: this.changerQualite, bindElement: this, param: [QUALITE_MAUVAIS, true]}],
             classesHtml: ['mh_form_submit'],
@@ -640,7 +653,7 @@ class ParcheminEnPage extends Parchemin {
 
         this.boutonTermine = Createur.elem('button', {
             id: this.id + '-boutonTermine',
-            attributs: [['title', "Définir ce parchemin comme \"terminé\".\nL'objectif est de ne plus voir les parchemins avec lesquels on ne désire plus travailler: déjà gratté, bien en l'état, etc..."]],
+            attributs: [['title', "Définir ce parchemin comme \"terminé\".\nL'objectif est de ne plus voir les parchemins avec lesquels on ne désire plus travailler: déjà gratté, très joli, etc..."]],
             enfants: [document.createTextNode('\u2605')],
             events: [{nom: 'click', fonction: this.changerQualite, bindElement: this, param: [QUALITE_TERMINE, true]}],
             classesHtml: ['mh_form_submit'],
@@ -684,7 +697,7 @@ class ParcheminEnPage extends Parchemin {
 
     changerQualite(nouvelleQualite, inversion = false) {
 
-        if (nouvelleQualite === QUALITE_BON) {
+        if (nouvelleQualite === QUALITE_BON) { // à gratter
             if (this.qualite == QUALITE_BON) {
                 if (inversion) this.devenirNeutre();
             }
@@ -692,7 +705,7 @@ class ParcheminEnPage extends Parchemin {
                 this.devenirBon();
             }
         }
-        else if (nouvelleQualite === QUALITE_MAUVAIS) { // QUALITE_MAUVAIS
+        else if (nouvelleQualite === QUALITE_MAUVAIS) {
             if (this.qualite == QUALITE_MAUVAIS) {
                 if (inversion) this.devenirNeutre();
             }
@@ -700,12 +713,20 @@ class ParcheminEnPage extends Parchemin {
                 this.devenirMauvais();
             }
         }
-        else if (nouvelleQualite === QUALITE_TERMINE) { // QUALITE_MAUVAIS
+        else if (nouvelleQualite === QUALITE_TERMINE) {
             if (this.qualite == QUALITE_TERMINE) {
                 if (inversion) this.devenirNeutre();
             }
             else {
                 this.devenirTermine();
+            }
+        }
+        else if (nouvelleQualite === QUALITE_PAS_TOUCHER) {
+            if (this.qualite == QUALITE_PAS_TOUCHER) {
+                if (inversion) this.devenirNeutre();
+            }
+            else {
+                this.devenirPasToucher();
             }
         }
         else {
@@ -714,10 +735,30 @@ class ParcheminEnPage extends Parchemin {
     }
 
 
-    // TODO mettre un background transparent vert pour les bons et rouges pour les mauvais
-    // TODO ligneDetail, ligneEffettotal, Ligne separation....
+    rendreVisibleParcheminAdequat(coche, actif, listeAffiches=[]) {
+        // soit une liste est fournie et on se base dessus, soit on utilise les cochages
+        if (listeAffiches.length > 0 ) { // vu fonctionnement pas besoin de document.getElementById('affichagesSurSoiCheckbox').checked
+            if (listeAffiches.includes(Number(this.id))) { //TODO pas terrible, définir clairement le type
+                this.afficherParchemin();
+            }
+            else {
+                this.cacherParchemin();
+            }
+        }
+        else {
+            if(actif) { // sinon on ne change rien à l'affichage, normalement en mode sur soi
+                if (coche) {
+                    this.afficherParchemin();
+                }
+                else {
+                    this.cacherParchemin();
+                }
+            }
+        }
+    }
+
     // TODO faire fonction générique pour devenirXXX
-    devenirBon() {
+    devenirBon(listeAffiches=[]) {
         this.qualite = QUALITE_BON;
         this.ligneEffetsGlyphes.style.backgroundColor = "#c9d8c533";// TODO mettre en constantes vert #c9d8c5 // bleu  #a8b6bf // orange #edd9c0
         this.ligneEffetTotal.style.backgroundColor = "#c9d8c533";
@@ -725,15 +766,13 @@ class ParcheminEnPage extends Parchemin {
         this.boutonCacher.style.display = 'none';
         this.boutonMauvais.style.display = 'none';
         this.boutonTermine.style.display = 'none';
-        if (document.getElementById('affichagesBonsCheckbox').checked) {  // moche de passer par là... et comme ça...
-            this.afficherParchemin();
-        }
-        else {
-            this.cacherParchemin();
-        }
+
+        const coche = document.getElementById('affichagesBonsCheckbox').checked;  // moche de passer par là... et comme ça...
+        const actif = !(document.getElementById('affichagesBonsCheckbox').disabled);
+        this.rendreVisibleParcheminAdequat(coche, actif, listeAffiches);
     }
 
-    devenirNeutre() {
+    devenirNeutre(listeAffiches=[]) {
         this.qualite = QUALITE_NEUTRE;
         this.ligneEffetsGlyphes.style.backgroundColor = "#11111100";
         this.ligneEffetTotal.style.backgroundColor = "#11111100";
@@ -741,31 +780,38 @@ class ParcheminEnPage extends Parchemin {
         this.boutonCacher.style.display = 'inline-block';
         this.boutonMauvais.style.display = 'inline-block';
         this.boutonTermine.style.display = 'inline-block';
-        if (this.affiche) {
-            this.afficherParchemin();
-        }
-        else {
-            this.cacherParchemin();
-        }
+        const coche = document.getElementById('affichagesNeutresCheckbox').checked;  // moche de passer par là... et comme ça...
+        const actif = !(document.getElementById('affichagesNeutresCheckbox').disabled);
+        this.rendreVisibleParcheminAdequat(coche, actif, listeAffiches);
     }
 
-    devenirMauvais() {
+    devenirMauvais(listeAffiches=[]) {
         this.qualite = QUALITE_MAUVAIS;
-        this.ligneEffetsGlyphes.style.backgroundColor = "#edd9c033";
+        this.ligneEffetsGlyphes.style.backgroundColor = "#edd9c033"; // rouge
         this.ligneEffetTotal.style.backgroundColor = "#edd9c033";
         this.boutonBon.style.display = 'none';
         this.boutonCacher.style.display = 'none';
         this.boutonMauvais.style.display = 'inline-block';
         this.boutonTermine.style.display = 'none';
-        if (document.getElementById('affichagesMauvaisCheckbox').checked) {
-            this.afficherParchemin();
-        }
-        else {
-            this.cacherParchemin();
-        }
+        const coche = document.getElementById('affichagesMauvaisCheckbox').checked;  // moche de passer par là... et comme ça...
+        const actif = !(document.getElementById('affichagesMauvaisCheckbox').disabled);
+        this.rendreVisibleParcheminAdequat(coche, actif, listeAffiches);
     }
 
-    devenirTermine() {
+    devenirPasToucher(listeAffiches=[]) {
+        this.qualite = QUALITE_PAS_TOUCHER;
+        this.ligneEffetsGlyphes.style.backgroundColor = "#a8b6bf33"; // bleu
+        this.ligneEffetTotal.style.backgroundColor = "#a8b6bf33";
+        this.boutonBon.style.display = 'none';
+        this.boutonCacher.style.display = 'inline-block';
+        this.boutonMauvais.style.display = 'none';
+        this.boutonTermine.style.display = 'none';
+        const coche = document.getElementById('affichagesPasToucherCheckbox').checked;  // moche de passer par là... et comme ça...
+        const actif = !(document.getElementById('affichagesPasToucherCheckbox').disabled);
+        this.rendreVisibleParcheminAdequat(coche, actif, listeAffiches);
+    }
+
+    devenirTermine(listeAffiches=[]) {
         this.qualite = QUALITE_TERMINE;
         this.ligneEffetsGlyphes.style.backgroundColor = "#ffee9022"; // gold
         this.ligneEffetTotal.style.backgroundColor = "#ffee9022";
@@ -773,12 +819,9 @@ class ParcheminEnPage extends Parchemin {
         this.boutonCacher.style.display = 'none';
         this.boutonMauvais.style.display = 'none';
         this.boutonTermine.style.display = 'inline-block';
-        if (document.getElementById('affichagesTerminesCheckbox').checked) {
-            this.afficherParchemin();
-        }
-        else {
-            this.cacherParchemin();
-        }
+        const coche = document.getElementById('affichagesTerminesCheckbox').checked;  // moche de passer par là... et comme ça...
+        const actif = !(document.getElementById('affichagesTerminesCheckbox').disabled);
+        this.rendreVisibleParcheminAdequat(coche, actif, listeAffiches);
     }
 
 
@@ -1230,7 +1273,8 @@ class Recuperateur {
         catch (e) {
             console.log(e);
             alert(`Problème rencontré lors de la récupération des glyphes.
-    Etes-vous bien connecté à MH ? Disposez-vous de 2PA ? Connaissez-vous la compétence Gratter ?`);
+    Etes-vous bien connecté à MH ? Disposez-vous de 2PA ? Connaissez-vous la compétence Gratter ?
+    (Des parchemins vierges peuvent également générer ce message.)`);
         }
         finally {
             this.demandeur.recevoirParcheminInfosComposition(parcheminPourComposition);
@@ -1295,6 +1339,8 @@ class OutilListerGrattage {
         // this.dateDerniereModification; // pas utile ?
         // ??? TODO permet de tester si correspond à celle de la sauvegarde, pour afficher si sauvé ou non
 
+        // this.parcheminsSurSoi = [4986515, 10769725]; // simuler parchemins sur soi
+        this.parcheminsSurSoi = [];
         this.parcheminsEnCoursDAjout = {};
         this.indexEnCoursDAjout = [];
 
@@ -1352,6 +1398,7 @@ class OutilListerGrattage {
     Etes-vous bien connecté à MH ? 
     Avez-vous encore 2 PA ? 
     Connaissez-vous la compétence Gratter ?`);
+            return;
         }
 
         displayDebug(" DEBUT parcheminsRecus");
@@ -1359,9 +1406,11 @@ class OutilListerGrattage {
         displayDebug(" DEBUT this.parchemins");
         displayDebug(JSON.parse(JSON.stringify(this.parchemins)));
 
+        this.parcheminsSurSoi = [];
         // REMARQUE !!! On supprime les parchemins que l'on connait déjà pour faire moins d'appels.
         const parcheminsATraiter = [];
         for (const p of parcheminsRecus) {
+            this.parcheminsSurSoi.push(p.id);
             if (p.id in this.parchemins) {
                 if (this.parchemins[p.id].etat === EN_COURS) {
                     parcheminsATraiter.push(p);
@@ -1373,11 +1422,18 @@ class OutilListerGrattage {
         }
         // old : filter... parcheminsRecus = parcheminsRecus.filter(p => {console.log(this.parchemins, p.id, !(p.id in this.parchemins)); return !(p.id in this.parchemins)});
 
+        // TODO fonctionnaliser un peu tout ce programme c'est devenu fort marécageux. :)
+        alert('Liste des parchemins sur vous mise à jour.');
+        this.activerModeAffichageSurSoi();
+
         displayDebug(" APRES FILTRE parcheminsATraiter");
         displayDebug(parcheminsATraiter.slice());
 
         if (nombreObtenu !== 0 && parcheminsATraiter.length == 0) {
             alert(`Aucun nouveau parchemin trouvé.\nEn avez-vous de nouveaux dans votre inventaire ?`);
+        }
+        else {
+            alert('Listes des parchemins pour lesquels ajouter des glyphes mise à jour.');
         }
 
         for (const p of parcheminsATraiter) {
@@ -1390,11 +1446,11 @@ class OutilListerGrattage {
             this.parcheminsEnCoursDAjout[p.id] = new ParcheminEnPage(p.id, p.nom);
             const position = this.indexEnCoursDAjout.indexOf(p.id);
             if (position !== -1) {
-                this.indexindexEnCoursDAjout.splice(position, 1);
+                this.indexEnCoursDAjout.splice(position, 1);
             }
             this.indexEnCoursDAjout.push(p.id);
         }
-        ;
+
         // old : foreach...
         // old : this.construireIndex(CRITERE_ID); // on garde l'ordre précédent avant ajout pour le début, comme ça les nouveaux arrivent à la fin ?
 
@@ -1477,6 +1533,7 @@ class OutilListerGrattage {
         }
     }
 
+    // TODO : affiche plus nécessaire, on ne cache plus
     reinitialiserChoix(affiche, cochages) {
         for (const id in this.parchemins) {
             if (affiche) this.parchemins[id].affiche = true;
@@ -1506,16 +1563,19 @@ class OutilListerGrattage {
         for (let id of this.index) {
             const p = this.parchemins[id];
             if (p.qualite == QUALITE_BON) {
-                p.devenirBon();                  // en fait un peu trop, mais ça passe, faudrait scinder fonctions
+                p.devenirBon(this.affichagesSurSoiCheckbox.checked ? this.parcheminsSurSoi : []);             // en fait un peu trop, mais ça passe, faudrait scinder fonctions
             }
             else if (p.qualite == QUALITE_MAUVAIS) {
-                p.devenirMauvais();
+                p.devenirMauvais(this.affichagesSurSoiCheckbox.checked ? this.parcheminsSurSoi : []);
             }
             else if (p.qualite == QUALITE_TERMINE) {
-                p.devenirTermine();
+                p.devenirTermine(this.affichagesSurSoiCheckbox.checked ? this.parcheminsSurSoi : []);
             }
-            else if (p.affiche) {
-                p.devenirNeutre();
+            else if (p.qualite == QUALITE_PAS_TOUCHER) {
+                p.devenirPasToucher(this.affichagesSurSoiCheckbox.checked ? this.parcheminsSurSoi : []);
+            }
+            else {
+                p.devenirNeutre(this.affichagesSurSoiCheckbox.checked ? this.parcheminsSurSoi : []);
             }
         }
     }
@@ -1538,7 +1598,7 @@ class OutilListerGrattage {
             let valeur = ((type == AU_MOINS) ? -Infinity : Infinity); // besoin d'initialiser pour que le tri fonctionnne
 
             if (zone) {
-                if (p.calculerValeurMax(ZONE, false) <= 0) garde = false; // pourrait mettre à true si on veut coher pour un max effet de zone
+                if (p.calculerValeurMax(ZONE, false) <= 0) garde = false; // pourrait mettre à true si on veut cocher pour un max effet de zone
             }
 
             if (garde) {
@@ -1596,9 +1656,17 @@ class OutilListerGrattage {
 
     nettoyerParchemins() {
         const idParcheminsASupprimer = document.getElementById('parcheminsASupprimer').value.replace(/\s/g, "").split(','); //enlève les blancs et espaces
+        let message = "Parchemin(s) supprimé(s) : \n";
         for (const id of  idParcheminsASupprimer) {
-            if (id in this.parchemins) this.parchemins[id].changerQualite(QUALITE_MAUVAIS);
+            // old if (id in this.parchemins) this.parchemins[id].changerQualite(QUALITE_MAUVAIS);
+            if (id in this.parchemins) {
+                message += id + " " + this.parchemins[id].effetDeBaseTexte + "\n";
+                this.parchemins[id].cacherParchemin(); // pas top il reste caché dans la page, mais fait l'affaire
+                delete this.parchemins[id];
+                this.index = this.index.filter(x => (x != id));
+            }
         }
+        alert(message);
     }
 
 
@@ -1615,17 +1683,26 @@ class OutilListerGrattage {
 
             const parcheminsIdBons = [];
             const parcheminsHtmlBons = [];
-            const parcheminsIdMauvais = [];
+            const parcheminsIdTermines = [];
             const parcheminsHtmlTermines = [];
+            const parcheminsIdPasToucher = [];
+            const parcheminsHtmlPasToucher = [];
+            const parcheminsIdMauvais = [];
+            const parcheminsHtmlMauvais = [];
             const parcheminsHtmlAutres = [];
 
-            function preparerHtml(p) {
+            function preparerHtml(p, avecGlyphes=true) {
                 const cochages = p.cochagesGlyphes;
                 let cochagesTexte = "grattages : aucun";
                 if (cochages.includes(1)) {
                     cochagesTexte = "<strong>grattages : " + cochages.map((x, i) => (Boolean(x) ? (i + 1) : '')).join(" ") + "</strong>";
                 }
-                return `<p><strong>${p.id}</strong> - ${p.nom} <em>${p.effetDeBaseTexte}</em> : ${cochagesTexte} => ${p.effetTotalHtml}</p>`;
+                if (avecGlyphes) {
+                    return `<p><strong>${p.id}</strong> - ${p.nom} <em>${p.effetDeBaseTexte}</em> : ${cochagesTexte} => ${p.effetTotalHtml}</p>`;
+                }
+                else {
+                    return `<p><strong>${p.id}</strong> - ${p.nom} <em>${p.effetDeBaseTexte}</em></p>`;
+                }
             }
 
             for (const id of this.index) {
@@ -1635,10 +1712,15 @@ class OutilListerGrattage {
                 }
                 else if (this.parchemins[id].qualite === QUALITE_MAUVAIS) {
                     parcheminsIdMauvais.push(id);
+                    parcheminsHtmlMauvais.push(preparerHtml(this.parchemins[id], false));
                 }
                 else if (this.parchemins[id].qualite === QUALITE_TERMINE) {
-                    //parcheminsIdTermines.push(id);  // utile ?
+                    parcheminsIdTermines.push(id);
                     parcheminsHtmlTermines.push(preparerHtml(this.parchemins[id]));
+                }
+                else if (this.parchemins[id].qualite === QUALITE_PAS_TOUCHER) {
+                    parcheminsIdPasToucher.push(id);
+                    parcheminsHtmlPasToucher.push(preparerHtml(this.parchemins[id], false));
                 }
                 else {
                     if (this.parchemins[id].affiche) {
@@ -1647,11 +1729,19 @@ class OutilListerGrattage {
                 }
             }
 
-            let reponse = '<p><strong style="color:darkgreen">Parchemins \"bons\" :</strong> ' + (parcheminsIdBons.length ? parcheminsIdBons.join(', ') : 'aucun') + '</p>';
+            let reponse = '<p><strong><em>---------------------------------------- Numéros ----------------------------------------</em></strong></p>';
+            reponse += '<p><strong style="color:darkgreen">Parchemins \"à gratter\" :</strong> ' + (parcheminsIdBons.length ? parcheminsIdBons.join(', ') : 'aucun') + '</p>';
+            reponse += '<p><strong style="color:gold">Parchemins \"terminés\" :</strong> ' + (parcheminsIdTermines.length ? parcheminsIdTermines.join(', ') : 'aucun') + '</p>';
+            reponse += '<p><strong style="color:mediumblue">Parchemins \"à garder tels quels\" :</strong> ' + (parcheminsIdPasToucher.length ? parcheminsIdPasToucher.join(', ') : 'aucun') + '</p>';
             reponse += '<p><strong style="color:orangered">Parchemins \"mauvais\" :</strong> ' + (parcheminsIdMauvais.length ? parcheminsIdMauvais.join(', ') : 'aucun') + '</p>';
-            reponse += '<p><strong style="color:darkgreen">Détails parchemins \"bons\" :</strong> ' + (parcheminsHtmlBons.length ? parcheminsHtmlBons.join('') : 'aucun') + '</p>';
+
+            reponse += '<p><strong><em>---------------------------------------- Détails ----------------------------------------</em></strong></p>';
+            reponse += '<p><strong style="color:darkgreen">Détails parchemins \"à gratter\" :</strong> ' + (parcheminsHtmlBons.length ? parcheminsHtmlBons.join('') : 'aucun') + '</p>';
             reponse += '<p><strong style="color:gold">Détails parchemins \"terminés\" :</strong> ' + (parcheminsHtmlTermines.length ? parcheminsHtmlTermines.join('') : 'aucun') + '</p>';
-            reponse += '<p><strong style="color:dimgrey">Détails autres parchemins visibles :</strong> ' + (parcheminsHtmlAutres.length ? parcheminsHtmlAutres.join('') : 'aucun') + '</p>';
+            reponse += '<p><strong style="color:mediumblue">Détails parchemins \"à garder tels quels\" :</strong> ' + (parcheminsHtmlPasToucher.length ? parcheminsHtmlPasToucher.join('') : 'aucun') + '</p>';
+            reponse += '<p><strong style="color:orangered">Détails parchemins \"mauvais\" :</strong> ' + (parcheminsHtmlMauvais.length ? parcheminsHtmlMauvais.join('') : 'aucun') + '</p>';
+
+            reponse += '<p><strong style="color:darkslategrey">Détails parchemins \"neutres\" à traiter :</strong> ' + (parcheminsHtmlAutres.length ? parcheminsHtmlAutres.join('') : 'aucun') + '</p>';
 
             this.texteRecapitulatif.innerHTML = reponse;
         }
@@ -1681,9 +1771,8 @@ class OutilListerGrattage {
 
     _attacherMessageIntro() {
         this.zone.innerHTML =
-            '<p>Pour pouvoir charger de nouveaux parchemins, vous devez être <strong>connecté</strong> à Mountyhall, <strong>connaitre</strong> la compétence Grattage et disposer de <strong>au moins 2 PA</strong>. ' +
-            'Ne prend pas en compte les parchemins "spéciaux" (mission, sortilège...)<br>' +
-            'Survoler avec la souris : les noms des parchemins pour voir les effets initiaux, les glyphes pour voir les détails, les champs et boutons pour plus d\'infos.</p>';
+            '<p>Pour pouvoir charger de nouveaux parchemins, vous devez être <strong>connecté</strong> à Mountyhall, <strong>connaitre</strong> la compétence Grattage et disposer de <strong>au moins 2 PA</strong>.<br>' +
+            '<strong>Survoler avec la souris :</strong> les noms des parchemins pour voir les effets initiaux, les glyphes pour voir les détails, les champs et boutons pour plus d\'infos.</p>';
     }
 
     _attacherBoutonsChargement() {
@@ -1726,7 +1815,7 @@ class OutilListerGrattage {
             parent: divBoutonsChargement,
             events: [{nom: 'click', fonction: this.validerImport, bindElement: this}],
             classesHtml: ['mh_form_submit'],
-            attributs: [['title', `Ajoute aux les parchemins en cours les parchemins fournis en format texte structuré.`]]
+            attributs: [['title', `Ajoute aux parchemins en cours les parchemins fournis en format texte structuré.`]]
         });
 
         Createur.elem('button', {                       // boutonExporterLocalement
@@ -1750,17 +1839,18 @@ class OutilListerGrattage {
         });
 
         this.boutonChargerListeParchemins = Createur.elem('button', {                        // boutonChargerDepuisHall
-            texte: 'Débuter Grattage pour liste parchemins (Hall)',
+            texte: 'Grattage, récupérer la liste des parchemins sur moi',
             style: "margin: 10px 5px 10px 5px; background-color: #FF851B", //orange
             parent: divBoutonsChargementHall,
             events: [{nom: 'click', fonction: this.chargerListeParcheminsGrattablesDepuisHall, bindElement: this}],
             classesHtml: ['mh_form_submit'],
             attributs: [['title', `Cliquer sur ce bouton débute l'action grattage pour récupérer la liste des parchemins que vous pouvez gratter.
-Le second bouton est ensuite préparé pour pouvoir aller chercher les glyphes des parchemins, un à un.`]]
+Le second bouton est ensuite préparé pour pouvoir aller chercher les glyphes des parchemins, un à un.
+Vous devez être connecté, connaitre Gratter et disposer de 2PA (qui ne seront pas consommés) pour utiliser cette fonctionnalité.`]]
         });
 
         this.boutonChargerGlyphes = Createur.elem('button', {
-            texte: 'Débuter Grattage pour glyphes (Hall) du parchemin :',
+            texte: 'Grattage, récupérer glyphes du parchemin :',
             style: "margin: 10px 5px 10px 5px; background-color: #FF851B", //orange
             parent: divBoutonsChargementHall,
             events: [{nom: 'click', fonction: this.chargerParcheminDepuisHall, bindElement: this}],
@@ -1768,7 +1858,10 @@ Le second bouton est ensuite préparé pour pouvoir aller chercher les glyphes d
             attributs: [['title', `Cliquer sur ce bouton démarre la compétence Gratter pour aller chercher les glyphes du parchemin 
 dont l'id se trouve dans le champ ci-contre, pour ensuite l'afficher dans la page.
 Vous devez au préalable charger la liste des parchemins à gratter via le bouton précédent.
-Après la recherche des glyphes d'un parchemin, le champ est mis à jour automatiquement avec le numéro du prochain parchemin de la liste.`]]
+Après la recherche des glyphes d'un parchemin, le champ est mis à jour automatiquement avec le numéro du prochain parchemin de la liste.
+Vous devez être connecté, connaitre Gratter et disposer de 2PA (qui ne seront pas consommés) pour utiliser cette fonctionnalité.
+Des parchemins "spéciaux" (ogham, rune, sort, invention extraordinaire, mission, gribouillé, vierge...) peuvent générer des lignes vides.
+Un nouveau parchemin est ajouté en bas de liste en tant que parchemin neutre. (Les parchemins neutres sont rendus visibles.)`]]
         });
 
         this.inputParcheminACharger = Createur.elem('input', {
@@ -1825,6 +1918,12 @@ Après la recherche des glyphes d'un parchemin, le champ est mis à jour automat
             }
             this.bloquerBoutonsChargement();
 
+            // on affiche les neutres pour voir les nouveaux arriver
+            if (this.affichagesNeutresCheckbox.checked === false) {
+                this.affichagesNeutresCheckbox.checked = true;
+                this.affichagesNeutresCheckbox.dispatchEvent(new Event('change'));
+            }
+
             // fait après réception plutôt
             //if (this.indexNouveauxParchemins.length > 0) {
             //    this.inputParcheminACharger.value = this.indexNouveauxParchemins[0];
@@ -1854,16 +1953,22 @@ Après la recherche des glyphes d'un parchemin, le champ est mis à jour automat
         });
 
         this.boutonSupprimerParchemins = Createur.elem('button', {             // moué, this un peu facile pour faire passer un truc...
-            texte: 'Définir parchemins "mauvais"',
+            texte: 'Supprimer parchemin de la liste',
             style: "margin: 10px",
             parent: divParcheminsASupprimer,
             events: [{nom: 'click', fonction: this.nettoyerParchemins, bindElement: this}],
-            classesHtml: ['mh_form_submit']
+            classesHtml: ['mh_form_submit'],
+            attributs: [['title', `Introduire le numéro du parchemin à supprimer de la liste.
+Vous ne pourrez plus voir ses informations, sauf si vous le chargez à nouveau ou si vous chargez une sauvegarde précédente.
+Possibilité d'introduire plusieurs numéros séparés par une virgule.`]]
         });
 
         Createur.elem('input', {              // si besoin de nom : const inputParcheminsASupprimer =
             id: 'parcheminsASupprimer',
-            attributs: [['type', 'text'], ['size', '100'], ['placeholder', 'Introduire dans ce champ les numéros des parchemins considérés comme "mauvais", séparés par des virgules']],
+            attributs: [['type', 'text'], ['size', '25'], ['placeholder', 'Introduire numéro de parchemin'],
+            ['title', `Introduire le numéro du parchemin à supprimer de la liste.
+Vous ne pourrez plus voir ses informations, sauf si vous le chargez à nouveau ou si vous chargez une sauvegarde précédente.
+Possibilité d'introduire plusieurs numéros séparés par une virgule.`]],
             parent: divParcheminsASupprimer
         });
     }
@@ -1943,16 +2048,19 @@ Combinaison : travaille sur base de la somme du total de tous les effets du parc
         html += "</select>";
 
         html +=
-            `<label style="margin:5px 0 5px 20px; padding:3px" for="dureeRecherche">Durée minimum :</label>
+            `<label style="margin:5px 0 5px 20px; padding:3px" for="dureeRecherche" title="Durée devant potentiellement pouvoir être atteinte">Durée minimum :</label>
                 <input style="margin:5px 20px 5px 0; padding:3px; width: 4em" id="dureeRecherche" name="dureeRecherche" type="number" 
-                min="0" max="45" step="1" value="0">`;
+                min="0" max="45" step="1" value="0" title="Durée devant potentiellement pouvoir être atteinte">`;
 
         html +=
-            `<input style="margin:5px 0 5px 5px; padding:3px" id="effetZoneObligatoire" name="effetZoneObligatoire" type="checkbox">
-                  <label style="margin:5px 5px 5px 0; padding:3px" for="effetZoneObligatoire">Effet de zone possible</label>`;
+            `<input style="margin:5px 0 5px 5px; padding:3px" id="effetZoneObligatoire" name="effetZoneObligatoire" type="checkbox" title="Effet de zone doit potentiellement pouvoir être atteint">
+                  <label style="margin:5px 5px 5px 0; padding:3px" for="effetZoneObligatoire" title="Effet de zone doit potentiellement pouvoir être atteint">Effet de zone possible</label>`;
 
         html +=
-            `<button style="margin:5px; padding:3px" class="mh_form_submit" id="boutonRecherche">Filtrer et Trier</button>`;
+            `<button style="margin:5px; padding:3px" class="mh_form_submit" id="boutonRecherche" 
+title="N'affiche que les parchemins répondant aux critères.
+Trie grosso modo sur base du critère de puissance demandé (puis sur l'id des parchemins en cas d'égalité).
+Change le numéro d'ordre affiché pour les parchemins.">Filtrer et Trier</button>`;
 
         divFiltrer.innerHTML = html;
 
@@ -1973,23 +2081,32 @@ Combinaison : travaille sur base de la somme du total de tous les effets du parc
             style: "margin:1vmin; padding:1vmin; border:solid 0px black"
         });
 
+        // ---------------
+
+        Createur.elem('span', {
+            parent: divCriteresAffichages,
+            style: "margin: 5px 0 5px 5px; padding: 3px; font-weight: bold",
+            texte : "Afficher les parchemins :"
+        });
+
         // ---------- checkbox bons
 
         this.affichagesBonsCheckbox = Createur.elem('input', {
             id: "affichagesBonsCheckbox",
             parent: divCriteresAffichages,
             style: "margin:5px 0 5px 5px; padding:3px",
-            attributs: [["type", "checkbox"], ["checked", true], ["name", "affichagesBonsCheckbox"]],
-            events: [{nom: 'change', fonction: this.afficherSelonQualite, bindElement: this, param: [QUALITE_BON]}]
+            attributs: [["type", "checkbox"], ["checked", "true"], ["name", "affichagesBonsCheckbox"]],
+            events: [{nom: 'change', fonction: this.afficherSelonQualite, // bindElement: // on le bind à l'outil
+                param: [QUALITE_BON, this]}]
         });
+        this.affichagesBonsCheckbox.checked = true;
 
-        Createur.elem('label', {
-            texte: "Afficher les \"bons\"",
+        this.affichagesBonsLabel = Createur.elem('label', {
+            texte: "\"à gratter\"",
             parent: divCriteresAffichages,
             style: "margin:5px 5px 5px 0; padding:3px",
             attributs: [["for", "affichagesBonsCheckbox"]]
         });
-        this.affichagesBonsCheckbox.checked = true;
 
 
         // ---------- checkbox mauvais
@@ -1998,13 +2115,14 @@ Combinaison : travaille sur base de la somme du total de tous les effets du parc
             id: "affichagesMauvaisCheckbox",
             parent: divCriteresAffichages,
             style: "margin:5px 0 5px 20px; padding:3px",
-            attributs: [["type", "checkbox"], ["checked", "false"], ["name", "affichagesMauvaisCheckbox"]],
-            events: [{nom: 'change', fonction: this.afficherSelonQualite, bindElement: this, param: [QUALITE_MAUVAIS]}]
+            attributs: [["type", "checkbox"], ["checked", "true"], ["name", "affichagesMauvaisCheckbox"]],
+            events: [{nom: 'change', fonction: this.afficherSelonQualite,
+                param: [QUALITE_MAUVAIS, this]}]
         });
-        this.affichagesMauvaisCheckbox.checked = false;
+        this.affichagesMauvaisCheckbox.checked = true;
 
-        Createur.elem('label', {
-            texte: "Afficher les \"mauvais\"",
+        this.affichagesMauvaisLabel = Createur.elem('label', {
+            texte: "    \"mauvais\"",
             parent: divCriteresAffichages,
             style: "margin:5px 5px 5px 0; padding:3px",
             attributs: [["for", "affichagesMauvaisCheckbox"]]
@@ -2016,18 +2134,89 @@ Combinaison : travaille sur base de la somme du total de tous les effets du parc
             id: "affichagesTerminesCheckbox",
             parent: divCriteresAffichages,
             style: "margin:5px 0 5px 20px; padding:3px",
-            attributs: [["type", "checkbox"], ["checked", "false"], ["name", "affichagesTerminesCheckbox"]],
-            events: [{nom: 'change', fonction: this.afficherSelonQualite, bindElement: this, param: [QUALITE_TERMINE]}]
+            attributs: [["type", "checkbox"], ["checked", "true"], ["name", "affichagesTerminesCheckbox"]],
+            events: [{nom: 'change', fonction: this.afficherSelonQualite,
+                param: [QUALITE_TERMINE, this]}]
         });
         this.affichagesTerminesCheckbox.checked = true;
 
-        Createur.elem('label', {
-            texte: "Afficher les \"terminés\"",
+        this.affichagesTerminesLabel = Createur.elem('label', {
+            texte: "\"terminés\"",
             parent: divCriteresAffichages,
             style: "margin:5px 5px 5px 0; padding:3px",
             attributs: [["for", "affichagesTerminesCheckbox"]]
         });
 
+        // ---------- checkbox pas toucher
+
+        this.affichagesPasToucherCheckbox = Createur.elem('input', {
+            id: "affichagesPasToucherCheckbox",
+            parent: divCriteresAffichages,
+            style: "margin:5px 0 5px 20px; padding:3px",
+            attributs: [["type", "checkbox"], ["checked", "true"], ["name", "affichagesPasToucherCheckbox"]],
+            events: [{nom: 'change', fonction: this.afficherSelonQualite,
+                param: [QUALITE_PAS_TOUCHER, this]}]
+        });
+        this.affichagesPasToucherCheckbox.checked = true;
+
+        this.affichagesPasToucherLabel = Createur.elem('label', {
+            texte: "\"pas toucher\"",
+            parent: divCriteresAffichages,
+            style: "margin:5px 5px 5px 0; padding:3px",
+            attributs: [["for", "affichagesPasToucherCheckbox"]]
+        });
+
+        // ---------- checkbox neutres
+
+        this.affichagesNeutresCheckbox = Createur.elem('input', {
+            id: "affichagesNeutresCheckbox",
+            parent: divCriteresAffichages,
+            style: "margin:5px 0 5px 20px; padding:3px",
+            attributs: [["type", "checkbox"], ["checked", "true"], ["name", "affichagesNeutresCheckbox"]],
+            events: [{nom: 'change', fonction: this.afficherSelonQualite,
+                param: [QUALITE_NEUTRE, this]}]
+        });
+        this.affichagesNeutresCheckbox.checked = true;
+
+        this.affichagesNeutresLabel = Createur.elem('label', {
+            texte: "\"neutres\"",
+            parent: divCriteresAffichages,
+            style: "margin:5px 5px 5px 0; padding:3px",
+            attributs: [["for", "affichagesNeutresCheckbox"]]
+        });
+
+        //-----------
+
+        Createur.elem('span', {
+            parent: divCriteresAffichages,
+            style: "margin:5px 0 5px 5px; padding:3px; font-weight: bold",
+            texte : "Ou bien alors :"
+        });
+
+        // ---------- checkbox voir sur moi
+
+        this.affichagesSurSoiCheckbox = Createur.elem('input', {
+            id: "affichagesSurSoiCheckbox",
+            parent: divCriteresAffichages,
+            style: "margin:5px 0 5px 20px; padding:3px",
+            attributs: [["type", "checkbox"],
+                ["checked", "false"],
+                ["disabled", "true"],
+                ["name", "affichagesSurSoiCheckbox"],
+            ["title", "Pour pouvoir utiliser cette option, il faut au préalable avoir cliqué sur le bouton : \"Grattage, récupérer la liste des parchemins sur moi.\""]],
+            events: [{nom: 'change', fonction: this.afficherSelonQualite,
+                param: [QUALITE_SUR_MOI, this]}]
+        });
+        this.affichagesSurSoiCheckbox.checked = false;
+
+        this.affichagesSurSoiLabel = Createur.elem('label', {
+            texte: "\"uniquement les parchemins sur moi\"",
+            parent: divCriteresAffichages,
+            style: "margin: 5px 5px 5px 0; padding:3px; color: #00000077",
+            attributs: [["for", "affichagesSurSoiCheckbox"], ["title", "Pour utiliser cette option, il faut au préalable avoir cliqué sur le bouton : \"Grattage, récupérer la liste des parchemins sur moi.\""]]
+        });
+
+        if (this.parcheminsSurSoi.length > 0) this.activerModeAffichageSurSoi();
 
         // ---------- checkbox deja gratté // Est-ce vraiment intéressant ? Qui a la priorité entre bon/mauvais ou déjà gratté ?
         //
@@ -2048,6 +2237,7 @@ Combinaison : travaille sur base de la somme du total de tous les effets du parc
         // });
 
 
+        /*
         // ---------- bouton rendre visible
 
         Createur.elem('input', {                         // boutonRendreVisibleCaches
@@ -2067,9 +2257,11 @@ Combinaison : travaille sur base de la somme du total de tous les effets du parc
             events: [{nom: 'click', fonction: this.cacherNeutres, bindElement: this}],
             classesHtml: ['mh_form_submit']
         });
+        */
 
     }
 
+    // plus utilise
     rendreVisibleCaches() {
         for (const id in this.parchemins) {
             if (this.parchemins[id].qualite === QUALITE_NEUTRE) /// hmm... devrait-on pouvoir cacher un bon alors que "bons visibles" est coché ?
@@ -2088,22 +2280,69 @@ Combinaison : travaille sur base de la somme du total de tous les effets du parc
 
     // TODO à méditer : est-ce ok ou non de cacher les bons ou mauvais en jouant en parallèle sur l'aspect caché temporairement ?
     // TODO : est-ce que le checkbox pourait envoyer directement la valeur du check pour ne pas avoir à les récupérer ici ?
-    afficherSelonQualite(qualiteConcernee) {
-        let valeurCheckbox = true;
-        if (qualiteConcernee === QUALITE_BON) valeurCheckbox = this.affichagesBonsCheckbox.checked;
-        else if (qualiteConcernee === QUALITE_MAUVAIS) valeurCheckbox = this.affichagesMauvaisCheckbox.checked;
-        else if (qualiteConcernee === QUALITE_TERMINE) valeurCheckbox = this.affichagesTerminesCheckbox.checked;
+    // bind sur le checkbox !
+    afficherSelonQualite(qualiteConcernee, outil) {
 
-        for (const id in this.parchemins) {
-            if (this.parchemins[id].qualite === qualiteConcernee) {
-                if (valeurCheckbox) {
-                    this.parchemins[id].afficherParchemin();
-                }
-                else {
-                    this.parchemins[id].cacherParchemin();
+        if (qualiteConcernee === QUALITE_SUR_MOI) {
+            if(this.checked) {
+                outil.passerModeAffichageSurSoi();
+            }
+            else {
+                outil.passerModeAffichageNormal();
+            }
+        }
+        else {
+            for (const id in outil.parchemins) {
+                if (outil.parchemins[id].qualite === qualiteConcernee) {
+                    if (this.checked) {
+                        outil.parchemins[id].afficherParchemin();
+                    }
+                    else {
+                        outil.parchemins[id].cacherParchemin();
+                    }
                 }
             }
         }
+    }
+
+    activerModeAffichageSurSoi() {
+        if(this.affichagesSurSoiCheckbox.disabled) {
+            this.affichagesSurSoiCheckbox.disabled = false;
+            this.affichagesSurSoiLabel.style.color = "black";
+        }
+    }
+
+    passerModeAffichageSurSoi() {
+        this.affichagesBonsCheckbox.disabled = true;
+        this.affichagesTerminesCheckbox.disabled = true;
+        this.affichagesPasToucherCheckbox.disabled = true;
+        this.affichagesMauvaisCheckbox.disabled = true;
+        this.affichagesNeutresCheckbox.disabled = true;
+
+        this.affichagesBonsLabel.style.opacity = 0.5;
+        this.affichagesTerminesLabel.style.opacity = 0.5;
+        this.affichagesPasToucherLabel.style.opacity = 0.5;
+        this.affichagesMauvaisLabel.style.opacity = 0.5;
+        this.affichagesNeutresLabel.style.opacity = 0.5;
+
+        this.afficherParcheminsAdequats();
+
+    }
+
+    passerModeAffichageNormal() {
+        this.affichagesBonsCheckbox.disabled = false;
+        this.affichagesTerminesCheckbox.disabled = false;
+        this.affichagesPasToucherCheckbox.disabled = false;
+        this.affichagesMauvaisCheckbox.disabled = false;
+        this.affichagesNeutresCheckbox.disabled = false;
+
+        this.affichagesBonsLabel.style.opacity = 1;
+        this.affichagesTerminesLabel.style.opacity = 1;
+        this.affichagesPasToucherLabel.style.opacity = 1;
+        this.affichagesMauvaisLabel.style.opacity = 1;
+        this.affichagesNeutresLabel.style.opacity = 1;
+
+        this.afficherParcheminsAdequats();
     }
 
     _attacherTableParchemins() {
@@ -2119,12 +2358,13 @@ Combinaison : travaille sur base de la somme du total de tous les effets du parc
 
     // renvoie un objet sauvegarde
     // attention array de parchemins et non un object
-    // TODO ne plus enregistrer l'indexe, le recréer au chargement. A la limite en précisant le critère (pour lorsqque remplacement par exemple)
+    // TODO ne plus enregistrer l'indexe, le recréer au chargement. A la limite en précisant le critère (pour lorsque remplacement par exemple)
     exporterParchemins() {
         const sauvegarde = {     // Sauvegarde pourrait avoir sa classe
+            dateEnregistrement: new Date().toISOString(),
+            criteresAffichage: this.recupererCriteresAffichage(),
             parchemins: [],
-            index: this.index,
-            dateEnregistrement: new Date().toISOString()
+            index: this.index
         };
         for (const id in this.parchemins) {
             const p = this.parchemins[id];
@@ -2175,6 +2415,8 @@ Combinaison : travaille sur base de la somme du total de tous les effets du parc
             this.parchemins[enregistrement.id] = ParcheminEnPage.creerParchemin(enregistrement);
         }
 
+        if (sauvegarde.criteresAffichage) this.adapterCriteresAffichage(sauvegarde.criteresAffichage); // réfléchir si meilleur endroit pour ça
+
         //this.construireIndex(); on garde l'ancien.
     }
 
@@ -2184,6 +2426,25 @@ Combinaison : travaille sur base de la somme du total de tous les effets du parc
         this.viderTexteRecapitulatif();
         console.log("Parchemin plus ancien : " + this.recupererDateAjoutParcheminPlusAncien());
         console.log("Parchemin plus récent : " + this.recupererDateAjoutParcheminPlusRecent());
+    }
+
+    recupererCriteresAffichage() {
+        return {
+            aGratter : this.affichagesBonsCheckbox.checked,
+            mauvais : this.affichagesMauvaisCheckbox.checked,
+            termines : this.affichagesTerminesCheckbox.checked,
+            pasToucher : this.affichagesPasToucherCheckbox.checked,
+            neutres : this.affichagesNeutresCheckbox.checked,
+        }
+    }
+
+    // ne se charge pas d'appeler le rafraichissement
+    adapterCriteresAffichage(criteresAffichage) {
+        this.affichagesBonsCheckbox.checked = criteresAffichage.aGratter;
+        this.affichagesMauvaisCheckbox.checked = criteresAffichage.mauvais;
+        this.affichagesTerminesCheckbox.checked = criteresAffichage.termines;
+        this.affichagesPasToucherCheckbox.checked = criteresAffichage.pasToucher;
+        this.affichagesNeutresCheckbox.checked = criteresAffichage.neutres;
     }
 
     chargerLocalement() {
@@ -2380,15 +2641,7 @@ if (window.location.pathname == "/mountyhall/MH_Play/Play_equipement.php?as_curS
 //--------------------- parchemins hardcodes --------------//
 
 // 4 parchos
-const SAUVEGARDE =
-    `{"parchemins":[{"id":"4986515","nom":"Traité de Clairvoyance","effetDeBaseTexte":"Vue : +4 | TOUR : -120 min","glyphesNumeros":["94488","87335","38177","16672","29969","57632","56613","16672","72997","72999"],"glyphesCoches":[0,0,0,0,0,0,0,0,0,0],"affiche":true,"qualite":0},{"id":"8505213","nom":"Rune des Cyclopes","effetDeBaseTexte":"ATT : +4 D3 | DEG : +4 | Vue : -4","glyphesNumeros":["95521","75049","90396","26924","26902","97553","46369","85285","9509","78100"],"glyphesCoches":[0,0,0,0,0,0,0,0,0,0],"affiche":true,"qualite":0},{"id":"10769725","nom":"Yeu'Ki'Pic","effetDeBaseTexte":"Vue : -9 | Effet de Zone","glyphesNumeros":["61722","45336","61720","95501","85269","11529","26892","61720","88344","23833"],"glyphesCoches":[0,0,0,0,0,0,0,0,0,0],"affiche":true,"qualite":0},{"id":"10789472","nom":"Yeu'Ki'Pic","effetDeBaseTexte":"Vue : -9 | Effet de Zone","glyphesNumeros":["58649","99613","91417","62737","49416","71944","58649","3337","32033","60697"],"glyphesCoches":[0,0,0,0,0,0,0,0,0,0],"affiche":true,"qualite":0}],` +
-    `"index":["4986515","8505213","10769725","10789472"],` +
-    `"dateEnregistrement":"14/06/2019 à 12:55:57"}`;
-
-// 1 parchos
-const SAUVEGARDE_1 =
-    `{"parchemins":[{"id":"985004","nom":"Rune des Foins","effetDeBaseTexte":"DEG : -1 | Vue : -1 | PV : -2 D3","glyphesNumeros":["85261","75033","30984","102664","88332","65800","67848","53512","83213","11537"],"glyphesCoches":[0,0,0,0,0,0,0,0,0,0],"affiche":true,"qualite":0}],` +
-    `"index":["985004"],` +
-    `"dateEnregistrement":"14/06/2019 à 12:52:16"}`;
+const SAUVEGARDE_4 =
+    `{"dateEnregistrement":"2019-06-29T23:21:49.552Z","criteresAffichage":{"aGratter":true,"mauvais":false,"termines":true,"pasToucher":false,"neutres":true},"parchemins":[{"id":"4986515","nom":"Traité de Clairvoyance","effetDeBaseTexte":"Vue : +4 | TOUR : -120 min","glyphesNumeros":["94488","87335","38177","16672","29969","57632","56613","16672","72997","72999"],"glyphesCoches":[0,0,0,0,0,0,0,0,0,0],"affiche":false,"qualite":2,"etat":1,"dateAjout":"2019-06-29T23:20:00.602Z"},{"id":"8505213","nom":"Rune des Cyclopes","effetDeBaseTexte":"ATT : +4 D3 | DEG : +4 | Vue : -4","glyphesNumeros":["95521","75049","90396","26924","26902","97553","46369","85285","9509","78100"],"glyphesCoches":[0,0,0,0,0,0,0,0,0,0],"affiche":false,"qualite":-1,"etat":1,"dateAjout":"2019-06-29T23:20:00.606Z"},{"id":"10769725","nom":"Yeu'Ki'Pic","effetDeBaseTexte":"Vue : -9 | Effet de Zone","glyphesNumeros":["61722","45336","61720","95501","85269","11529","26892","61720","88344","23833"],"glyphesCoches":[0,0,0,0,0,0,0,0,0,0],"affiche":true,"qualite":1,"etat":1,"dateAjout":"2019-06-29T23:20:00.607Z"},{"id":"10789472","nom":"Yeu'Ki'Pic","effetDeBaseTexte":"Vue : -9 | Effet de Zone","glyphesNumeros":["58649","99613","91417","62737","49416","71944","58649","3337","32033","60697"],"glyphesCoches":[0,0,0,0,0,0,0,0,0,0],"affiche":true,"qualite":0,"etat":1,"dateAjout":"2019-06-29T23:20:00.608Z"}],"index":["4986515","8505213","10769725","10789472"]}`
 
 
