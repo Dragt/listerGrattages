@@ -5,7 +5,7 @@
 // @include */maListeParchemins/grattage*
 // @include */mountyhall/MH_Play/Play_equipement.php*
 // @grant none
-// @version 1.7
+// @version 1.8
 // ==/UserScript==
 //
 
@@ -114,6 +114,10 @@ let compteurSecuriteNombreAppels = 0;
 // attention au include Violent Monkey qui doit correspondre
 const urlOutilListerGrattage = "/mountyhall/MH_Play/Actions/Competences/userscriptGrattage";
 const urlAutreQueMountihall = "/maListeParchemins/grattage.html";
+
+const SERVEUR_CLOUD = "https://mh-storage.herokuapp.com";
+const SERVICE_SAUVEGARDE = "/listerGrattages/api/v1/ajouter";
+const SERVICE_CHARGEMENT = "/listerGrattages/api/v1/recuperer";
 
 // affichage bonus malus
 const COULEUR_BONUS = '#336633'; // vert '336633'
@@ -1815,8 +1819,9 @@ class OutilListerGrattage {
             classesHtml: ['mh_form_submit'],
             attributs: [['title', `Charge les parchemins depuis la mémoire locale de votre navigateur.
 Il s'agit du chargement PAR DEFAUT.
+Nécessite une sauvegarde au préalable.
 Ne supprime aucun parchemin de la liste en cours. Ajoute et place en fin de liste les parchemins se trouvant dans la sauvegarde.
-Nécessite une sauvegarde au préalable.`]]
+Si vous désirez obtenir exactement et uniquement l'état de la sauvegarde, vous pouvez au préalable supprimer les parchemins en cours via le bouton adéquat.`]]
         });
 
         // ------------------------
@@ -1861,7 +1866,7 @@ Nécessite une sauvegarde au préalable.`]]
 Ceci enregistre "en ligne" les données concernant cette page, sur un serveur distinct de Mountyhall, pour pouvoir les récupérer par la suite.
 Les données enregistrées concernent uniquement les parchemins, leurs glyphes ainsi que les paramètres de l'interface.
 Le serveur de données peut être considéré comme "amateur" : il a pour simple vocation d'être "utile". Pour donner une idée, le gestionnaire de ce service l'utilise sans crainte et conseillerait à ses amis de l'utiliser. Cependant, si vous considérez les données de vos parchemins comme cruciales et strictement confidentielles, il ne vous est pas recommandé d'utiliser ce service. (Cela va de même pour tous les outils externes à mh...) De plus, ce service pouvant tomber en panne ou être arrêté à tout moment, il vous est conseillé de conserver des copies locales de vos données (exporter sous format texte) si elles ont de l'importance pour vous.
-Pour information, le gestionnaire de se service se réserve le droit de traiter les données des parchemins stockés, de manière anonyme, pour effectuer des études globales concernant la compétence Gratter. Exemple : déterminer la puissance moyenne des glyphes, quelles sont les puissances les plus hautes obtenues, quelles sont les glyphes les plus fréquentes, etc.`]]
+Pour information, le gestionnaire de ce service se réserve le droit de traiter les données des parchemins stockés, de manière anonyme, pour effectuer des études globales concernant la compétence Gratter. Exemple : déterminer la puissance moyenne des glyphes, quelles sont les puissances les plus hautes obtenues, quelles sont les glyphes les plus fréquentes, etc.`]]
         });
         // TODO : title pourrait être trop long dans certains navigateurs
 
@@ -1872,8 +1877,9 @@ Pour information, le gestionnaire de se service se réserve le droit de traiter 
             events: [{nom: 'click', fonction: this.chargerEnLigne, bindElement: this}],
             classesHtml: ['mh_form_submit'],
             attributs: [['title', `Charge les parchemins depuis le cloud.
+Nécessite une sauvegarde au préalable.
 Ne supprime aucun parchemin de la liste en cours. Ajoute et place en fin de liste les parchemins se trouvant dans la sauvegarde.
-Nécessite une sauvegarde au préalable.`]]
+Si vous désirez obtenir exactement et uniquement l'état de la sauvegarde, vous pouvez au préalable supprimer les parchemins en cours via le bouton adéquat.`]]
         });
 
         // ------------------------
@@ -2505,12 +2511,12 @@ Change le numéro d'ordre affiché pour les parchemins.">Filtrer et Trier</butto
             this.importerParcheminsEtAfficher(sauvegarde);
         }
         else {
-            alert('Aucune donnée trouvée localement.');
+            alert('Aucune sauvegarde trouvée localement dans le navigateur.\n(Vous pourriez essayer de charger depuis le cloud ?)');
         }
     }
 
     chargerEnLigne() {
-        const url = "https://mh-storage.herokuapp.com/listerGrattages/api/v1/recuperer";
+        const url = SERVEUR_CLOUD + SERVICE_CHARGEMENT;
         fetch(url, {
             method : "POST",
             headers: {
@@ -2565,7 +2571,7 @@ Cela écrasera l'éventuelle sauvegarde précédente.
 
             const sauvegardeTexte = JSON.stringify(this.exporterParchemins());
 
-            const url = "https://mh-storage.herokuapp.com/listerGrattages/api/v1/ajouter";
+            const url = SERVEUR_CLOUD + SERVICE_SAUVEGARDE;
             fetch(url, {
                 method : "POST",
                 headers: {
@@ -2759,6 +2765,5 @@ if (window.location.pathname == "/mountyhall/MH_Play/Play_equipement.php?as_curS
 // 4 parchos
 const SAUVEGARDE =
     `{"dateEnregistrement":"2019-06-29T23:21:49.552Z","criteresAffichage":{"aGratter":true,"mauvais":false,"termines":true,"pasToucher":false,"neutres":true},"parchemins":[{"id":"4986515","nom":"Traité de Clairvoyance","effetDeBaseTexte":"Vue : +4 | TOUR : -120 min","glyphesNumeros":["94488","87335","38177","16672","29969","57632","56613","16672","72997","72999"],"glyphesCoches":[0,0,0,0,0,0,0,0,0,0],"affiche":false,"qualite":2,"etat":1,"dateAjout":"2019-06-29T23:20:00.602Z"},{"id":"8505213","nom":"Rune des Cyclopes","effetDeBaseTexte":"ATT : +4 D3 | DEG : +4 | Vue : -4","glyphesNumeros":["95521","75049","90396","26924","26902","97553","46369","85285","9509","78100"],"glyphesCoches":[0,0,0,0,0,0,0,0,0,0],"affiche":false,"qualite":-1,"etat":1,"dateAjout":"2019-06-29T23:20:00.606Z"},{"id":"10769725","nom":"Yeu'Ki'Pic","effetDeBaseTexte":"Vue : -9 | Effet de Zone","glyphesNumeros":["61722","45336","61720","95501","85269","11529","26892","61720","88344","23833"],"glyphesCoches":[0,0,0,0,0,0,0,0,0,0],"affiche":true,"qualite":1,"etat":1,"dateAjout":"2019-06-29T23:20:00.607Z"},{"id":"10789472","nom":"Yeu'Ki'Pic","effetDeBaseTexte":"Vue : -9 | Effet de Zone","glyphesNumeros":["58649","99613","91417","62737","49416","71944","58649","3337","32033","60697"],"glyphesCoches":[0,0,0,0,0,0,0,0,0,0],"affiche":true,"qualite":0,"etat":1,"dateAjout":"2019-06-29T23:20:00.608Z"}],"index":["4986515","8505213","10769725","10789472"]}`
-
 
 
