@@ -13,3 +13,5 @@ Afficher l'usure et la solidité des composants dans la page de grattage
 Enregistrer toutes les données des grattages en ligne (ou pas) pour pouvoir après les analyser.
 
 Enregistrer les changements d'un parchemin à la fois, pour ne pas répercuter les cochages automatiques du tri/filtre
+
+Mettre un marqueur en rouge lorsque la situation actuelle n'est pas enregistrée.
