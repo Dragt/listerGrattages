@@ -83,6 +83,11 @@
  * Le filtre/tri ne change plus le "cochage" des parchemins marqués "à gratter" ou "termines
  */
 
+/* v1.8
+ * possibilite d'enregistrer et recuperer les sauvegardes en ligne
+ */
+
+
 // ****************************************************************************************************************************
 // Inspiré de l'algorithme de détermination des effets des Grattages des gribouillages par trollthar (85665) et
 // du script d'aide de Vapulabehemot, inspirés des recherche de Bran (El'Haine).
@@ -118,6 +123,10 @@ const COULEUR_AUTRE = '#000000'; // noir '000000'
 
 const AU_MOINS = 1;
 const AU_PLUS = -1;
+
+let NUMERO_TROLL;
+
+if (STATIQUE) NUMERO_TROLL = 666666666;
 
 
 //---------------------- variables globales et constantes : Analyse des glyphes  -----------------------//
@@ -1694,6 +1703,7 @@ class OutilListerGrattage {
             const parcheminsHtmlPasToucher = [];
             const parcheminsIdMauvais = [];
             const parcheminsHtmlMauvais = [];
+            const parcheminsIdAutres = [];
             const parcheminsHtmlAutres = [];
 
             function preparerHtml(p, avecGlyphes=true) {
@@ -1728,7 +1738,8 @@ class OutilListerGrattage {
                     parcheminsHtmlPasToucher.push(preparerHtml(this.parchemins[id], false));
                 }
                 else {
-                    if (this.parchemins[id].affiche) {
+                    if (this.parchemins[id].qualite === QUALITE_NEUTRE) {
+                        parcheminsIdAutres.push(id);
                         parcheminsHtmlAutres.push(preparerHtml(this.parchemins[id]));
                     }
                 }
@@ -1739,6 +1750,7 @@ class OutilListerGrattage {
             reponse += '<p><strong style="color:gold">Parchemins \"terminés\" :</strong> ' + (parcheminsIdTermines.length ? parcheminsIdTermines.join(', ') : 'aucun') + '</p>';
             reponse += '<p><strong style="color:mediumblue">Parchemins \"à garder tels quels\" :</strong> ' + (parcheminsIdPasToucher.length ? parcheminsIdPasToucher.join(', ') : 'aucun') + '</p>';
             reponse += '<p><strong style="color:orangered">Parchemins \"mauvais\" :</strong> ' + (parcheminsIdMauvais.length ? parcheminsIdMauvais.join(', ') : 'aucun') + '</p>';
+            reponse += '<p><strong style="color:darkslategrey">Parchemins \"neutres\" à traiter :</strong> ' + (parcheminsIdAutres.length ? parcheminsIdAutres.join(', ') : 'aucun') + '</p>';
 
             reponse += '<p><strong><em>---------------------------------------- Détails ----------------------------------------</em></strong></p>';
             reponse += '<p><strong style="color:darkgreen">Détails parchemins \"à gratter\" :</strong> ' + (parcheminsHtmlBons.length ? parcheminsHtmlBons.join('') : 'aucun') + '</p>';
@@ -1797,13 +1809,17 @@ class OutilListerGrattage {
 
         Createur.elem('button', {                       // boutonChargerLocalement
             texte: 'Charger (navigateur)',
-            style: "margin: 10px 5pxpx 10px 5px",
+            style: "margin: 10px 5px 10px 5px",
             parent: divBoutonsChargement,
             events: [{nom: 'click', fonction: this.chargerLocalement, bindElement: this}],
             classesHtml: ['mh_form_submit'],
-            attributs: [['title', `Charge les parchemins depuis la mémoire local de votre navigateur.
-    Nécessite une sauvegarde au préalable.`]]
+            attributs: [['title', `Charge les parchemins depuis la mémoire locale de votre navigateur.
+Il s'agit du chargement PAR DEFAUT.
+Ne supprime aucun parchemin de la liste en cours. Ajoute et place en fin de liste les parchemins se trouvant dans la sauvegarde.
+Nécessite une sauvegarde au préalable.`]]
         });
+
+        // ------------------------
 
         Createur.elem('button', {                       // boutonImporterTexte
             texte: 'Importer (texte)',
@@ -1832,6 +1848,35 @@ class OutilListerGrattage {
             attributs: [['title', `Place dans votre presse-papier une copie des parchemins au format texte structuré.
     Vous pouvez donc ensuite coller (ctrl-v) simplement l'enregistrement.`]]
         });
+
+        // ------------------------ TURLU
+
+        Createur.elem('button', {                        // boutonSauvegarderEnLigne
+            texte: 'Sauvegarder (cloud)',
+            style: "margin: 10px 5px 10px 20px; background-color: #0074D9", // bleu
+            parent: divBoutonsChargement,
+            events: [{nom: 'click', fonction: this.sauvegarderEnLigne, bindElement: this}],
+            classesHtml: ['mh_form_submit'],
+            attributs: [['title', `Sauvegarde dans le cloud vos parchemins et l'état de vos analyses.
+Ceci enregistre "en ligne" les données concernant cette page, sur un serveur distinct de Mountyhall, pour pouvoir les récupérer par la suite.
+Les données enregistrées concernent uniquement les parchemins, leurs glyphes ainsi que les paramètres de l'interface.
+Le serveur de données peut être considéré comme "amateur" : il a pour simple vocation d'être "utile". Pour donner une idée, le gestionnaire de ce service l'utilise sans crainte et conseillerait à ses amis de l'utiliser. Cependant, si vous considérez les données de vos parchemins comme cruciales et strictement confidentielles, il ne vous est pas recommandé d'utiliser ce service. (Cela va de même pour tous les outils externes à mh...) De plus, ce service pouvant tomber en panne ou être arrêté à tout moment, il vous est conseillé de conserver des copies locales de vos données (exporter sous format texte) si elles ont de l'importance pour vous.
+Pour information, le gestionnaire de se service se réserve le droit de traiter les données des parchemins stockés, de manière anonyme, pour effectuer des études globales concernant la compétence Gratter. Exemple : déterminer la puissance moyenne des glyphes, quelles sont les puissances les plus hautes obtenues, quelles sont les glyphes les plus fréquentes, etc.`]]
+        });
+        // TODO : title pourrait être trop long dans certains navigateurs
+
+        Createur.elem('button', {                       // boutonChargerEnLigne
+            texte: 'Charger (cloud)',
+            style: "margin: 10px 10px 10px 5px",
+            parent: divBoutonsChargement,
+            events: [{nom: 'click', fonction: this.chargerEnLigne, bindElement: this}],
+            classesHtml: ['mh_form_submit'],
+            attributs: [['title', `Charge les parchemins depuis le cloud.
+Ne supprime aucun parchemin de la liste en cours. Ajoute et place en fin de liste les parchemins se trouvant dans la sauvegarde.
+Nécessite une sauvegarde au préalable.`]]
+        });
+
+        // ------------------------
 
         this.zoneDateEnregistrement = Createur.elem('span', {style: "margin: 10px", parent: divBoutonsChargement});
     }
@@ -2367,6 +2412,7 @@ Change le numéro d'ordre affiché pour les parchemins.">Filtrer et Trier</butto
     // TODO ne plus enregistrer l'indexe, le recréer au chargement. A la limite en précisant le critère (pour lorsque remplacement par exemple)
     exporterParchemins() {
         const sauvegarde = {     // Sauvegarde pourrait avoir sa classe
+            numeroTroll: String(NUMERO_TROLL),
             dateEnregistrement: new Date().toISOString(),
             criteresAffichage: this.recupererCriteresAffichage(),
             parchemins: [],
@@ -2463,8 +2509,34 @@ Change le numéro d'ordre affiché pour les parchemins.">Filtrer et Trier</butto
         }
     }
 
+    chargerEnLigne() {
+        const url = "https://mh-storage.herokuapp.com/listerGrattages/api/v1/recuperer";
+        fetch(url, {
+            method : "POST",
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({numeroTroll: String(NUMERO_TROLL)})
+        }).then(
+            response => response.json()
+        ).then(
+            data => {
+                console.log(data);
+                if ("error" in data) {
+                    alert("Problème rencontré lors de la récupération des données.");
+                }
+                else if ("aucun" in data) {
+                    alert("Aucune sauvegarde retrouvée.");
+                }
+                else {
+                    this.importerParcheminsEtAfficher(data);
+                }
+            }
+        );
+    }
+
     supprimerTousLesParchemins() {
-        if (confirm("Désirez-vous effacer les parchemins en cours ?")) {
+        if (confirm("Désirez-vous supprimer tous les parchemins en cours ?")) {
             this.parchemins = {};
             this.index = [];
             this.incomplets = [];
@@ -2473,10 +2545,46 @@ Change le numéro d'ordre affiché pour les parchemins.">Filtrer et Trier</butto
     }
 
     sauvegarderLocalement() {
-        const sauvegardeTexte = JSON.stringify(this.exporterParchemins());
-        console.log(sauvegardeTexte); // normalement il y a l'export pour ça...
-        window.localStorage.setItem('sauvegardeListerGrattages', sauvegardeTexte);
-        alert("Etat sauvegardé.");
+        if (confirm(`Désirez-vous sauvegarder localement dans votre navigateur ?
+Cela écrasera l'éventuelle sauvegarde précédente.
+
+(Si vous désirez plutôt compléter l'état de la sauvegarde précédente, veuillez au préalable charger cette sauvegarde via le bouton adéquat pour compléter la liste en cours.)`)) {
+            const sauvegardeTexte = JSON.stringify(this.exporterParchemins());
+            console.log(sauvegardeTexte); // normalement il y a l'export pour ça...
+            window.localStorage.setItem('sauvegardeListerGrattages', sauvegardeTexte);
+            alert("Etat sauvegardé.");
+        }
+    }
+
+    sauvegarderEnLigne() {
+
+        if (confirm(`Désirez-vous sauvegarder dans le cloud ?
+Cela écrasera l'éventuelle sauvegarde précédente.
+
+(Si vous désirez plutôt compléter l'état de la sauvegarde précédente, veuillez au préalable charger cette sauvegarde via le bouton adéquat pour compléter la liste en cours.)`)) {
+
+            const sauvegardeTexte = JSON.stringify(this.exporterParchemins());
+
+            const url = "https://mh-storage.herokuapp.com/listerGrattages/api/v1/ajouter";
+            fetch(url, {
+                method : "POST",
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: sauvegardeTexte
+            }).then(
+                response => response.json()
+            ).then(
+                data => {
+                    if ("error" in data) {
+                        alert("Problème rencontré lors de l'enregistrement des données.");
+                    }
+                    else {
+                        alert("Sauvegarde enregistrée.");
+                    }
+                }
+            );
+        }
     }
 
     validerImport(critereCompleter) {
@@ -2588,6 +2696,8 @@ function traitementEquipement() {
         displayDebug("Numéro de Trõll non trouvé : abandon");
         return;
     }
+    NUMERO_TROLL = numTroll;
+
     tr = document.getElementById("mh_objet_hidden_" + numTroll + "Parchemin");
     if (!tr) {
         displayDebug("Table des parchos non trouvée : abandon");
@@ -2649,3 +2759,6 @@ if (window.location.pathname == "/mountyhall/MH_Play/Play_equipement.php?as_curS
 // 4 parchos
 const SAUVEGARDE =
     `{"dateEnregistrement":"2019-06-29T23:21:49.552Z","criteresAffichage":{"aGratter":true,"mauvais":false,"termines":true,"pasToucher":false,"neutres":true},"parchemins":[{"id":"4986515","nom":"Traité de Clairvoyance","effetDeBaseTexte":"Vue : +4 | TOUR : -120 min","glyphesNumeros":["94488","87335","38177","16672","29969","57632","56613","16672","72997","72999"],"glyphesCoches":[0,0,0,0,0,0,0,0,0,0],"affiche":false,"qualite":2,"etat":1,"dateAjout":"2019-06-29T23:20:00.602Z"},{"id":"8505213","nom":"Rune des Cyclopes","effetDeBaseTexte":"ATT : +4 D3 | DEG : +4 | Vue : -4","glyphesNumeros":["95521","75049","90396","26924","26902","97553","46369","85285","9509","78100"],"glyphesCoches":[0,0,0,0,0,0,0,0,0,0],"affiche":false,"qualite":-1,"etat":1,"dateAjout":"2019-06-29T23:20:00.606Z"},{"id":"10769725","nom":"Yeu'Ki'Pic","effetDeBaseTexte":"Vue : -9 | Effet de Zone","glyphesNumeros":["61722","45336","61720","95501","85269","11529","26892","61720","88344","23833"],"glyphesCoches":[0,0,0,0,0,0,0,0,0,0],"affiche":true,"qualite":1,"etat":1,"dateAjout":"2019-06-29T23:20:00.607Z"},{"id":"10789472","nom":"Yeu'Ki'Pic","effetDeBaseTexte":"Vue : -9 | Effet de Zone","glyphesNumeros":["58649","99613","91417","62737","49416","71944","58649","3337","32033","60697"],"glyphesCoches":[0,0,0,0,0,0,0,0,0,0],"affiche":true,"qualite":0,"etat":1,"dateAjout":"2019-06-29T23:20:00.608Z"}],"index":["4986515","8505213","10769725","10789472"]}`
+
+
+
