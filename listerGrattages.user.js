@@ -80,6 +80,7 @@
  * possibilité d'afficher les parchemins sur soi.
  * possibilité de supprimer un parchemin (et non plus de définir une liste comme mauvais)
  * sauvegarde les critères d'affichage
+ * Le filtre/tri ne change plus le "cochage" des parchemins marqués "à gratter" ou "termines
  */
 
 // ****************************************************************************************************************************
@@ -738,7 +739,7 @@ class ParcheminEnPage extends Parchemin {
     rendreVisibleParcheminAdequat(coche, actif, listeAffiches=[]) {
         // soit une liste est fournie et on se base dessus, soit on utilise les cochages
         if (listeAffiches.length > 0 ) { // vu fonctionnement pas besoin de document.getElementById('affichagesSurSoiCheckbox').checked
-            if (listeAffiches.includes(Number(this.id))) { //TODO pas terrible, définir clairement le type
+            if (listeAffiches.includes(this.id)) { //TODO pas terrible, définir clairement le type
                 this.afficherParchemin();
             }
             else {
@@ -1339,7 +1340,7 @@ class OutilListerGrattage {
         // this.dateDerniereModification; // pas utile ?
         // ??? TODO permet de tester si correspond à celle de la sauvegarde, pour afficher si sauvé ou non
 
-        // this.parcheminsSurSoi = [4986515, 10769725]; // simuler parchemins sur soi
+        // this.parcheminsSurSoi = ["4986515", "10769725"]; // simuler parchemins sur soi
         this.parcheminsSurSoi = [];
         this.parcheminsEnCoursDAjout = {};
         this.indexEnCoursDAjout = [];
@@ -1535,10 +1536,11 @@ class OutilListerGrattage {
     }
 
     // TODO : affiche plus nécessaire, on ne cache plus
+    // TODO : envoyer la liste des groupes pour lesquels on veut reinitialiser ? Ici hardcode tout sauf "a gratter" et "termines"
     reinitialiserChoix(affiche, cochages) {
         for (const id in this.parchemins) {
-            if (affiche) this.parchemins[id].affiche = true;
-            if (cochages) {
+            if (affiche) this.parchemins[id].affiche = true; // inutile
+            if (cochages && !([QUALITE_BON, QUALITE_TERMINE].includes(this.parchemins[id].qualite))) {
                 for (const g of this.parchemins[id].glyphes) {
                     g.decocher();
                 }
@@ -1585,6 +1587,7 @@ class OutilListerGrattage {
         displayDebug("afficherParcheminsFiltres");
         // choix de reinitialiser pour pouvoir cocher les options les plus puissantes et voir rapidement l'interet
         // laisser les cochages de l'utilisateur aussi peut être inétressant (et demander moins de progra. ;) ), j'ai fait comme je préfère
+        // pour finir laisse choix pour "à gratter" et "termine"
         this.reinitialiserChoix(true, true);
         const type = this.filtre.type.value;
         const puissance = Number(this.filtre.puissance.value);
@@ -1609,16 +1612,17 @@ class OutilListerGrattage {
             }
 
             if (garde) {
+                const cocher = !([QUALITE_BON, QUALITE_TERMINE].includes(p.qualite)); // hardcode ici qu'on ne coche pas pour les "à gratter" et "termines"
                 if (type == AU_MOINS) {
                     if (carac == COMBINAISON) {
                         valeur = p.calculerTotalPuissances();
                     }
                     else if (carac == TOUTES) {
                         const caracMax = p.calculerCaracMax();
-                        valeur = p.calculerValeurMax(caracMax, true);
+                        valeur = p.calculerValeurMax(caracMax, cocher);
                     }
                     else {
-                        valeur = p.calculerValeurMax(carac, true);
+                        valeur = p.calculerValeurMax(carac, cocher);
                     }
                     if (valeur < puissance) garde = false;
                 }
@@ -1628,10 +1632,10 @@ class OutilListerGrattage {
                     }
                     else if (carac == TOUTES) {
                         const caracMin = p.calculerCaracMin();
-                        valeur = p.calculerValeurMin(caracMin, true);
+                        valeur = p.calculerValeurMin(caracMin, cocher);
                     }
                     else {
-                        valeur = p.calculerValeurMin(carac, true);
+                        valeur = p.calculerValeurMin(carac, cocher);
                     }
                     if (valeur > puissance) garde = false;
                 }
@@ -2035,7 +2039,7 @@ Possibilité d'introduire plusieurs numéros séparés par une virgule.`]],
               title=" Toutes caracs : travaille sur base de la carac la plus élevée (ou la plus basse), 
     en dehors de la durée et de l'effet de zone, pour chaque parchemin. 
     En cas d'égalité il en prend une au hasard.
-    L'outil va également cocher les glyphes pour obtenir l'effet le plus puissant recherché.
+    L'outil va également cocher les glyphes des parchemins pour obtenir l'effet le plus puissant recherché SAUF pour les parchemins marqués 'à gratter' et 'terminés' pour lesquels les cochages enregistrés ne seront pas modifiés.
 
 Combinaison : travaille sur base de la somme du total de tous les effets du parchemin (hors effet de zone et hors durée) multiplié par la durée positive potentielle du parchemin.">`;
         html += `<option value="${TOUTES}">Toutes caracs</option>`;
@@ -2061,6 +2065,7 @@ Combinaison : travaille sur base de la somme du total de tous les effets du parc
             `<button style="margin:5px; padding:3px" class="mh_form_submit" id="boutonRecherche" 
 title="N'affiche que les parchemins répondant aux critères.
 Trie grosso modo sur base du critère de puissance demandé (puis sur l'id des parchemins en cas d'égalité).
+L'outil va également cocher les glyphes des parchemins pour obtenir l'effet le plus puissant recherché SAUF pour les parchemins marqués 'à gratter' et 'terminés' pour lesquels les cochages enregistrés ne seront pas modifiés.
 Change le numéro d'ordre affiché pour les parchemins.">Filtrer et Trier</button>`;
 
         divFiltrer.innerHTML = html;
@@ -2642,7 +2647,5 @@ if (window.location.pathname == "/mountyhall/MH_Play/Play_equipement.php?as_curS
 //--------------------- parchemins hardcodes --------------//
 
 // 4 parchos
-const SAUVEGARDE_4 =
+const SAUVEGARDE =
     `{"dateEnregistrement":"2019-06-29T23:21:49.552Z","criteresAffichage":{"aGratter":true,"mauvais":false,"termines":true,"pasToucher":false,"neutres":true},"parchemins":[{"id":"4986515","nom":"Traité de Clairvoyance","effetDeBaseTexte":"Vue : +4 | TOUR : -120 min","glyphesNumeros":["94488","87335","38177","16672","29969","57632","56613","16672","72997","72999"],"glyphesCoches":[0,0,0,0,0,0,0,0,0,0],"affiche":false,"qualite":2,"etat":1,"dateAjout":"2019-06-29T23:20:00.602Z"},{"id":"8505213","nom":"Rune des Cyclopes","effetDeBaseTexte":"ATT : +4 D3 | DEG : +4 | Vue : -4","glyphesNumeros":["95521","75049","90396","26924","26902","97553","46369","85285","9509","78100"],"glyphesCoches":[0,0,0,0,0,0,0,0,0,0],"affiche":false,"qualite":-1,"etat":1,"dateAjout":"2019-06-29T23:20:00.606Z"},{"id":"10769725","nom":"Yeu'Ki'Pic","effetDeBaseTexte":"Vue : -9 | Effet de Zone","glyphesNumeros":["61722","45336","61720","95501","85269","11529","26892","61720","88344","23833"],"glyphesCoches":[0,0,0,0,0,0,0,0,0,0],"affiche":true,"qualite":1,"etat":1,"dateAjout":"2019-06-29T23:20:00.607Z"},{"id":"10789472","nom":"Yeu'Ki'Pic","effetDeBaseTexte":"Vue : -9 | Effet de Zone","glyphesNumeros":["58649","99613","91417","62737","49416","71944","58649","3337","32033","60697"],"glyphesCoches":[0,0,0,0,0,0,0,0,0,0],"affiche":true,"qualite":0,"etat":1,"dateAjout":"2019-06-29T23:20:00.608Z"}],"index":["4986515","8505213","10769725","10789472"]}`
-
-
