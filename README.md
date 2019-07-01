@@ -2,16 +2,16 @@
 
 Idées:
 
-Ajouter un commentaire lié à un parchemin (pour indiqué sa position, son proprio, quand est-ce qu'il a servi, etc...)
+* Afficher l'usure et la solidité des composants dans la page de grattage
 
-Trier/filtrer sur base des dates d'enregistrement des parchemins
+* Trier/filtrer sur base des dates d'enregistrement des parchemins
 
-Pouvoir sauvegarder la liste en ligne et pas dans le navigateur. (nodejs heroku + mongodb atlas)
+* Mettre un marqueur bien visible lorsque la situation actuelle n'est pas enregistrée (voire un message de confirmation avant de quitter la page ?)
 
-Afficher l'usure et la solidité des composants dans la page de grattage
+* Ajouter un commentaire lié à un parchemin (pour indiquer sa position, son proprio, quand est-ce qu'il a servi, etc...)
 
-Enregistrer toutes les données des grattages en ligne (ou pas) pour pouvoir après les analyser.
+* Enregistrer toutes les données des grattages en ligne (ou pas) pour pouvoir après les analyser. Lesquelles? (Efficacité du grattage? Usure du compo ?)
 
-Enregistrer les changements d'un parchemin à la fois, pour ne pas répercuter les cochages automatiques du tri/filtre
+* Enregistrer les changements d'un seul parchemin à la fois dans la sauvegarde
 
-Mettre un marqueur en rouge lorsque la situation actuelle n'est pas enregistrée.
+
